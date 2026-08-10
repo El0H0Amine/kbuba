@@ -11,6 +11,7 @@ save as the human-readable markdown table. Orchestration file saves
 run the configured guard and restore the previous content on failure.
 """
 import json
+import os
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -48,7 +49,8 @@ class Proj:
 if not (ROOT / "config.json").exists():
     (ROOT / "config.json").write_text(json.dumps(
         {"project": ROOT.parent.name, "data": "data/board.json",
-         "orchestration_dir": "../orchestration", "guard": "true"}, indent=1))
+         "orchestration_dir": "../orchestration",
+         "guard": "exit 0"}, indent=1))  # no-op passer valid in sh AND cmd.exe
 _data = ROOT / json.loads((ROOT / "config.json").read_text())["data"]
 if not _data.exists():
     _data.parent.mkdir(parents=True, exist_ok=True)
@@ -495,16 +497,19 @@ if __name__ == "__main__":
         print(f"tracker: no free port ({want or '8611-8620'})")
         sys.exit(1)
     url = f"http://127.0.0.1:{port}"
-    # Record the live URL so `kbuba get-url` can always recover it.
+    # Record the live URL for `kbuba get-url`. Line 2 is our pid so a
+    # dying older instance can never delete a newer instance's record
+    # (the restart race: old cleanup runs after new startup wrote it).
     STATE_HOME.mkdir(parents=True, exist_ok=True)
-    (STATE_HOME / "url").write_text(url)
+    (STATE_HOME / "url").write_text(f"{url}\n{os.getpid()}\n")
     print(f"tracker: {url}  project={CUR.cfg['project']}  "
           f"data={CUR.data.name}  orch={CUR.orch}")
     srv.serve_forever()
-    # reached via /api/shutdown: drop the url record if it is still ours
+    # reached via /api/shutdown: drop the url record only if it is OURS
+    # (url AND pid match - a successor may already have overwritten it)
     try:
-        if (STATE_HOME / "url").read_text().strip() == url:
+        if (STATE_HOME / "url").read_text().split()[:2] == [url, str(os.getpid())]:
             (STATE_HOME / "url").unlink()
-    except OSError:
+    except (OSError, IndexError):
         pass
     print("tracker: stopped")

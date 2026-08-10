@@ -133,10 +133,14 @@ PY = "python" if os.name == "nt" else "python3"
 
 
 def tracker_url():
-    """(url, alive) - the last URL the server recorded, probed live."""
+    """(url, alive) - the last URL the server recorded, probed live.
+    The record's first line is the URL (line 2 is the server's pid)."""
     import urllib.request
     f = Path.home() / ".local" / "state" / "kbuba-tracker" / "url"
-    url = f.read_text().strip() if f.exists() else "http://127.0.0.1:8611"
+    try:
+        url = f.read_text().split()[0]
+    except (OSError, IndexError):
+        url = "http://127.0.0.1:8611"
     try:
         urllib.request.urlopen(url + "/api/config", timeout=1)
         return url, True
@@ -197,18 +201,18 @@ MANUAL_MSG = (f"tracker will NOT auto-start: run  {PY} tracker/serve.py  "
 
 
 def stop_tracker():
-    """Stop a running tracker (autostarted OR manual) via its local-only
-    shutdown endpoint; the /api/config probe first confirms the port
-    really holds a tracker."""
+    """'stopped' | 'failed' (running, but shutdown refused - e.g. a server
+    from before the endpoint existed) | 'absent'. Never conflate failed
+    with absent: the caller must tell the user a live process remains."""
     import urllib.request
     url, alive = tracker_url()
     if not alive:
-        return False
+        return "absent"
     try:
         urllib.request.urlopen(url + "/api/shutdown", data=b"{}", timeout=2)
-        return True
+        return "stopped"
     except Exception:
-        return False
+        return "failed"
 
 
 def update():
@@ -224,7 +228,11 @@ def update():
     else:
         print(f"update: git pull failed - {out[-200:]}")
         print("update: continuing with the tracker restart anyway")
-    was_running = stop_tracker()
+    st = stop_tracker()
+    if st == "failed":
+        print("tracker: running instance refused shutdown (older version?) - "
+              "the restarted server will take the next free port")
+    was_running = st != "absent"
     uid = os.getuid() if hasattr(os, "getuid") else 0
     restarted = False
     if (sys.platform == "darwin" and (Path.home() / "Library" / "LaunchAgents"
@@ -267,9 +275,19 @@ def uninstall(with_ponytail):
         removed = plist.exists() and (plist.unlink() or True)
         print(f"autostart: {'removed' if removed else 'was not installed'}")
     elif os.name == "nt":
-        r = run("schtasks", "/Delete", "/F", "/TN", "kbuba-tracker",
-                capture_output=True, text=True)
-        print(f"autostart: {'removed' if r.returncode == 0 else 'was not installed'}")
+        if run("schtasks", "/Query", "/TN", "kbuba-tracker",
+               capture_output=True).returncode != 0:
+            print("autostart: was not installed")
+        else:
+            r = run("schtasks", "/Delete", "/F", "/TN", "kbuba-tracker",
+                    capture_output=True, text=True)
+            if r.returncode == 0:
+                print("autostart: removed")
+            else:
+                print("autostart: scheduled task EXISTS but could not be "
+                      f"removed ({(r.stdout + r.stderr).strip()[-120:]}). "
+                      "It was likely created elevated - run from an admin "
+                      "prompt:  schtasks /Delete /F /TN kbuba-tracker")
     else:
         run("systemctl", "--user", "disable", "--now", "kbuba-tracker",
             capture_output=True)
@@ -277,12 +295,24 @@ def uninstall(with_ponytail):
         removed = unit.exists() and (unit.unlink() or True)
         print(f"autostart: {'removed' if removed else 'was not installed'}")
 
-    print("tracker: stopped" if stop_tracker() else "tracker: was not running")
+    print({"stopped": "tracker: stopped",
+           "absent": "tracker: was not running",
+           "failed": "tracker: STILL RUNNING - shutdown refused (a server "
+                     "from before the shutdown endpoint?); kill the serve.py "
+                     "process manually"}[stop_tracker()])
 
     shim = shutil.which("kbuba") or shutil.which("kbuba.cmd")
     if shim and str(HERE) in (os.path.realpath(shim) + Path(shim).read_text(errors="replace")):
-        Path(shim).unlink()
-        print(f"command: removed {shim}")
+        if os.name == "nt" and shim.lower().endswith(".cmd"):
+            # cmd.exe errors (and exits 1) if its batch file vanishes
+            # mid-run, so delete it a beat later from a detached process
+            subprocess.Popen(
+                ["cmd", "/c", f'ping -n 2 127.0.0.1 >nul & del /q "{shim}"'],
+                creationflags=0x00000008 | 0x00000200)  # DETACHED | NEW_GROUP
+            print(f"command: {shim} removes itself in a moment")
+        else:
+            Path(shim).unlink()
+            print(f"command: removed {shim}")
     elif shim:
         print(f"command: {shim} points at a different kbuba copy - left alone")
     else:

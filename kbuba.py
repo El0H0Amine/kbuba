@@ -301,10 +301,37 @@ def stop_tracker():
         return "failed"
 
 
+INFRA = ("tracker/serve.py", "tracker/index.html", "tracker/README.md",
+         "tracker/install-autostart.sh", "tools/ledger-guard/check.py")
+
+
+def sync_projects():
+    """Refresh the kbuba-owned infrastructure copies (never legitimately
+    project-edited) in every discovered project. Guideline files and
+    ledgers/board data are NEVER touched - guidelines diverge on purpose
+    and data migrates lazily inside the reading code."""
+    sys.path.insert(0, str(HERE / "tracker"))
+    import serve
+    for p in serve.discover():
+        root = Path(p["repo"])
+        if (root / "tracker").resolve() == (HERE / "tracker").resolve():
+            continue  # the clone itself is the source
+        pairs = [(HERE / f, root / f) for f in INFRA]
+        pairs.append((TPL / "githooks-pre-commit", root / ".githooks" / "pre-commit"))
+        n = 0
+        for src, dst in pairs:
+            if src.exists() and dst.exists() and src.read_bytes() != dst.read_bytes():
+                shutil.copy(src, dst)
+                n += 1
+        if n:
+            print(f"infra: refreshed {n} file(s) in {p['name']} ({root}) - "
+                  "review with git diff there")
+
+
 def update():
-    """Pull the latest kbuba into this clone, then restart the tracker so
-    it serves the new code. A manually-run tracker is stopped and its
-    restart command printed - projects are never touched."""
+    """Pull the latest kbuba into this clone, refresh the infrastructure
+    copies in every project, then restart the tracker so it serves the
+    new code. Guidelines and ledgers in projects are never touched."""
     import time
     r = run("git", "-C", str(HERE), "pull", "--ff-only",
             capture_output=True, text=True)
@@ -314,6 +341,7 @@ def update():
     else:
         print(f"update: git pull failed - {out[-200:]}")
         print("update: continuing with the tracker restart anyway")
+    sync_projects()
     st = stop_tracker()
     if st == "failed":
         print("tracker: running instance refused shutdown (older version?) - "

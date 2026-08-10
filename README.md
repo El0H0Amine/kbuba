@@ -165,10 +165,15 @@ apply them anyway.
 kbuba update
 ```
 
-Pulls the latest kbuba into the clone and restarts the tracker so it
-serves the new code (via the login service when installed; a manually
-run tracker is stopped and the restart command printed). Projects are
-never touched - their boards live in their own repos.
+Pulls the latest kbuba into the clone, refreshes the kbuba-owned
+infrastructure copies inside every discovered project (`tracker/serve.py`,
+`index.html`, `tools/ledger-guard/check.py`, the pre-commit hook - files
+projects never edit; review with `git diff` there, nothing is committed
+for you), and restarts the global tracker so it serves the new code.
+What update NEVER touches in a project: guideline files (`CLAUDE.md`,
+`orchestration/*.md` - they legitimately diverge per project) and
+ledgers/board data (data-shape changes migrate lazily inside the reading
+code, old files keep working as-is).
 
 ## Uninstall
 

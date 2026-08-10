@@ -745,7 +745,7 @@ function renderQuestions() {
       <b style="margin-left:8px">${esc(it.name)}</b>
       <span class="notes" style="float:right">asked ${q.asked || ""}${askEv ? " · " : ""}</span>
       ${askEv ? `<span style="float:right;margin-right:6px">${readBadge(askEv)}</span>` : ""}</div>
-    <div style="margin-bottom:8px">${esc(q.text)}</div>
+    <div style="margin-bottom:8px;white-space:pre-wrap">${esc(q.text)}</div>
     ${qHistory(q)}
     <textarea rows="2" id="ans-${q.id}" placeholder="your decision..."></textarea>
     <div style="margin-top:8px"><button class="act" data-answer="${it.id}|${q.id}" data-ta="ans-${q.id}">Answer &amp; log decision</button></div>

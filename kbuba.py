@@ -6,6 +6,8 @@ tracker board into the current directory. Cross-platform, stdlib only.
                                           scaffold into the CURRENT dir
     kbuba get-url                         print the live tracker URL (bookmark it)
     kbuba autostart                       launch the tracker at login (mac/linux/win)
+    kbuba uninstall [--with-ponytail]     remove autostart, PATH shim, tracker state
+                                          (never deletes projects or this clone)
     kbuba ui                              open the tracker board
     kbuba help
 
@@ -193,6 +195,54 @@ MANUAL_MSG = (f"tracker will NOT auto-start: run  {PY} tracker/serve.py  "
               "in a separate terminal and KEEP IT OPEN while you work")
 
 
+def uninstall(with_ponytail):
+    """Remove everything kbuba put on this machine: the autostart
+    service, the PATH shim, the tracker state dir, and (only with
+    --with-ponytail) the ponytail plugin. Scaffolded projects and this
+    clone are never deleted."""
+    if sys.platform == "darwin":
+        run("launchctl", "bootout",
+            f"gui/{os.getuid()}/com.projectkbuba.tracker", capture_output=True)
+        plist = Path.home() / "Library" / "LaunchAgents" / "com.projectkbuba.tracker.plist"
+        removed = plist.exists() and (plist.unlink() or True)
+        print(f"autostart: {'removed' if removed else 'was not installed'}")
+    elif os.name == "nt":
+        r = run("schtasks", "/Delete", "/F", "/TN", "kbuba-tracker",
+                capture_output=True, text=True)
+        print(f"autostart: {'removed' if r.returncode == 0 else 'was not installed'}")
+    else:
+        run("systemctl", "--user", "disable", "--now", "kbuba-tracker",
+            capture_output=True)
+        unit = Path.home() / ".config" / "systemd" / "user" / "kbuba-tracker.service"
+        removed = unit.exists() and (unit.unlink() or True)
+        print(f"autostart: {'removed' if removed else 'was not installed'}")
+
+    shim = shutil.which("kbuba") or shutil.which("kbuba.cmd")
+    if shim and str(HERE) in (os.path.realpath(shim) + Path(shim).read_text(errors="replace")):
+        Path(shim).unlink()
+        print(f"command: removed {shim}")
+    elif shim:
+        print(f"command: {shim} points at a different kbuba copy - left alone")
+    else:
+        print("command: no shim found on PATH")
+
+    shutil.rmtree(Path.home() / ".local" / "state" / "kbuba-tracker",
+                  ignore_errors=True)
+    print("tracker state (registry, url record): removed")
+
+    if with_ponytail and shutil.which("claude"):
+        run("claude", "plugin", "uninstall", "ponytail@ponytail")
+        run("claude", "plugin", "marketplace", "remove", "ponytail")
+        print("ponytail: uninstalled (its ~/.config/ponytail left for you to delete)")
+    else:
+        print("ponytail: KEPT (other projects may use it) - remove with "
+              "`kbuba uninstall --with-ponytail` or "
+              "`claude plugin uninstall ponytail@ponytail`")
+
+    print(f"\nnot deleted (yours to remove): this clone ({HERE}) "
+          "and every scaffolded project")
+
+
 def main():
     flags = {a for a in sys.argv[1:] if a.startswith("--")}
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -226,6 +276,8 @@ def main():
         get_url()
     elif cmd == "autostart":
         autostart_install()
+    elif cmd == "uninstall":
+        uninstall("--with-ponytail" in flags)
     elif cmd == "ui":
         url, alive = tracker_url()
         if alive:

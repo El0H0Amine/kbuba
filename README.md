@@ -149,4 +149,14 @@ apply them anyway.
 - `TRACKER.md` is regenerated on every save as the human-readable view;
   the JSON stays canonical.
 
+## Uninstall
+
+```sh
+kbuba uninstall                 # removes autostart + PATH shim + tracker state
+kbuba uninstall --with-ponytail # also uninstalls the ponytail plugin
+```
+
+It prints exactly what it removed. Your scaffolded projects and the
+clone itself are never deleted - remove the clone folder yourself.
+
 See `tracker/README.md` for the full feature list and data shape.

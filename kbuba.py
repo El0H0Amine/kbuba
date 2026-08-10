@@ -6,7 +6,8 @@ tracker board into the current directory. Cross-platform, stdlib only.
                                           scaffold into the CURRENT dir
     kbuba get-url                         print the live tracker URL (bookmark it)
     kbuba autostart                       launch the tracker at login (mac/linux/win)
-    kbuba uninstall [--with-ponytail]     remove autostart, PATH shim, tracker state
+    kbuba update                          git pull this clone + restart the tracker
+    kbuba uninstall [--with-ponytail]     stop tracker, remove autostart/shim/state
                                           (never deletes projects or this clone)
     kbuba ui                              open the tracker board
     kbuba help
@@ -210,6 +211,50 @@ def stop_tracker():
         return False
 
 
+def update():
+    """Pull the latest kbuba into this clone, then restart the tracker so
+    it serves the new code. A manually-run tracker is stopped and its
+    restart command printed - projects are never touched."""
+    import time
+    r = run("git", "-C", str(HERE), "pull", "--ff-only",
+            capture_output=True, text=True)
+    out = (r.stdout + r.stderr).strip()
+    if r.returncode == 0:
+        print(f"update: {out.splitlines()[-1]}")
+    else:
+        print(f"update: git pull failed - {out[-200:]}")
+        print("update: continuing with the tracker restart anyway")
+    was_running = stop_tracker()
+    uid = os.getuid() if hasattr(os, "getuid") else 0
+    restarted = False
+    if (sys.platform == "darwin" and (Path.home() / "Library" / "LaunchAgents"
+                                      / "com.projectkbuba.tracker.plist").exists()):
+        restarted = run("launchctl", "kickstart", "-k",
+                        f"gui/{uid}/com.projectkbuba.tracker",
+                        capture_output=True).returncode == 0
+    elif os.name == "nt":
+        if run("schtasks", "/Query", "/TN", "kbuba-tracker",
+               capture_output=True).returncode == 0:
+            restarted = run("schtasks", "/Run", "/TN", "kbuba-tracker",
+                            capture_output=True).returncode == 0
+    elif (Path.home() / ".config" / "systemd" / "user"
+          / "kbuba-tracker.service").exists():
+        restarted = run("systemctl", "--user", "restart",
+                        "kbuba-tracker").returncode == 0
+    if restarted:
+        for _ in range(10):
+            time.sleep(0.5)
+            if tracker_url()[1]:
+                break
+        print("tracker: restarted on the new code")
+        get_url()
+    elif was_running:
+        print("tracker: stopped (it was running the old code manually) - "
+              f"start it again:  {PY} \"{HERE / 'tracker' / 'serve.py'}\"")
+    else:
+        print("tracker: not running; nothing to restart")
+
+
 def uninstall(with_ponytail):
     """Remove everything kbuba put on this machine: the running tracker,
     the autostart service, the PATH shim, the tracker state dir, and
@@ -293,6 +338,8 @@ def main():
         get_url()
     elif cmd == "autostart":
         autostart_install()
+    elif cmd == "update":
+        update()
     elif cmd == "uninstall":
         uninstall("--with-ponytail" in flags)
     elif cmd == "ui":

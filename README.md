@@ -149,6 +149,17 @@ apply them anyway.
 - `TRACKER.md` is regenerated on every save as the human-readable view;
   the JSON stays canonical.
 
+## Update
+
+```sh
+kbuba update
+```
+
+Pulls the latest kbuba into the clone and restarts the tracker so it
+serves the new code (via the login service when installed; a manually
+run tracker is stopped and the restart command printed). Projects are
+never touched - their boards live in their own repos.
+
 ## Uninstall
 
 ```sh

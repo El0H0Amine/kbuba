@@ -75,6 +75,19 @@ tools/ledger-guard/        corruption + size-cap checks on the ledgers
 .gitignore
 ```
 
+## Bundled discipline: ponytail
+
+`setup-folder` also installs
+[ponytail](https://github.com/dietrichgebert/ponytail) (MIT) - a plugin
+that makes AI agents write the minimum code that actually works - and
+sets its default intensity to **ultra** on first-time setup (an existing
+mode config is never overwritten). The scaffold prints exactly what it
+installed and where the default lives. Opt out with
+`kbuba setup-folder --no-ponytail`; change modes anytime with
+`/ponytail lite|full|ultra|off`. The scaffolded `CLAUDE.md` makes the
+guidelines explicit, so agents on platforms without the plugin read and
+apply them anyway.
+
 ## The method in five lines
 
 1. The Conductor owns every specification and never lets an implementer

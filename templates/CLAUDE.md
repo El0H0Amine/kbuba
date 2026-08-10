@@ -48,6 +48,17 @@ way the packet is the implementer's entire brief.
    copy from git, never by compacting. Full rules and size caps in
    `orchestration/CONDUCTOR.md` §9.
 
+## Code discipline: ponytail (project default ULTRA)
+
+The ponytail plugin (github.com/dietrichgebert/ponytail) was installed
+by this scaffold and its guidelines BIND every coding task here:
+question whether the code needs to exist at all, reuse this codebase
+first, prefer the stdlib and native platform features over
+dependencies, one line before fifty - the minimum that works. Change
+intensity with `/ponytail lite|full|ultra|off` (default lives in
+`~/.config/ponytail/config.json`). If your agent platform lacks the
+plugin, read the ponytail repo's guidelines and apply them anyway.
+
 ## Quick reference
 
 ```sh

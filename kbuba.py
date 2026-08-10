@@ -2,9 +2,14 @@
 """kbuba - scaffold an AI Conductor/Implementer orchestration system +
 tracker board into the current directory. Cross-platform, stdlib only.
 
-    kbuba setup-folder ["Project Name"]   scaffold into the CURRENT dir
+    kbuba setup-folder ["Project Name"] [--no-ponytail]
+                                          scaffold into the CURRENT dir
     kbuba ui                              open the tracker board
     kbuba help
+
+setup-folder also installs the ponytail plugin (minimal-code discipline,
+github.com/dietrichgebert/ponytail) with ultra as first-time default and
+tells you exactly what it did; skip with --no-ponytail.
 
 setup-folder creates: CLAUDE.md/AGENTS.md agent entry points,
 orchestration/ (Conductor+Implementer protocol, seed ledgers), tracker/
@@ -14,6 +19,7 @@ defaults to the folder name. Templates live in <repo>/templates/; edit
 them there to change what every new project gets.
 """
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -86,10 +92,47 @@ def setup_folder(name):
           "automatically; roots live in ~/.local/state/kbuba-tracker/registry.json)")
 
 
+def install_ponytail():
+    """Install the ponytail plugin (minimal-code discipline, MIT,
+    github.com/dietrichgebert/ponytail) and default it to ultra. An
+    existing mode config is never overwritten - the user's choice wins."""
+    cfg_dir = (Path(os.environ.get("APPDATA", Path.home())) / "ponytail"
+               if os.name == "nt" else Path.home() / ".config" / "ponytail")
+    cfg = cfg_dir / "config.json"
+    if shutil.which("claude"):
+        for args in (("claude", "plugin", "marketplace", "add", "DietrichGebert/ponytail"),
+                     ("claude", "plugin", "install", "ponytail@ponytail")):
+            r = run(*args, capture_output=True, text=True)
+            out = (r.stdout + r.stderr).strip()
+            if r.returncode != 0 and "already" not in out.lower():
+                print(f"ponytail: '{' '.join(args[1:])}' failed - {out[-200:]}")
+                print("ponytail: NOT installed; install manually (see README)")
+                return
+        if not cfg.exists():
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            cfg.write_text('{\n "defaultMode": "ultra"\n}\n')
+            print("ponytail: INSTALLED, default mode ULTRA (first-time setup)")
+        else:
+            print("ponytail: INSTALLED (kept your existing mode config)")
+        print("  change anytime: /ponytail lite|full|ultra|off  "
+              f"(default lives in {cfg})")
+    else:
+        print("ponytail: claude CLI not found - install it in your agent:")
+        print("  /plugin marketplace add DietrichGebert/ponytail")
+        print("  /plugin install ponytail@ponytail")
+        print(f"  then set ultra as default in {cfg}")
+
+
 def main():
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
+    args = [a for a in sys.argv[1:] if a != "--no-ponytail"]
+    no_ponytail = "--no-ponytail" in sys.argv
+    cmd = args[0] if args else "help"
     if cmd == "setup-folder":
-        setup_folder(sys.argv[2] if len(sys.argv) > 2 else Path.cwd().name)
+        setup_folder(args[1] if len(args) > 1 else Path.cwd().name)
+        if no_ponytail:
+            print("ponytail: skipped (--no-ponytail)")
+        else:
+            install_ponytail()
     elif cmd == "ui":
         webbrowser.open("http://127.0.0.1:8611")
     else:

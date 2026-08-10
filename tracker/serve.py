@@ -438,7 +438,7 @@ if __name__ == "__main__":
             print(f"[{s['when']}] {s['session']} ({s['model']}): {s['summary']}")
         print(f"-- {len(rows)} session(s) for {item}")
         sys.exit(0)
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8611
+    want = int(sys.argv[1]) if len(sys.argv) > 1 else None
     reg = registry()
     last = reg.get("last")
     if last and last != str(ROOT) and Path(last, "config.json").exists():
@@ -448,13 +448,35 @@ if __name__ == "__main__":
             CUR = LOCAL  # stale registry entry; fall back to this repo
     reg["last"] = str(CUR.root)
     save_registry(reg)
-    try:
-        srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    except OSError as e:
-        # Clean exit so a launchd KeepAlive doesn't respawn-loop when a
-        # manually started instance already owns the port.
-        print(f"tracker: port {port} already in use ({e}); exiting")
-        sys.exit(0)
-    print(f"tracker: http://127.0.0.1:{port}  project={CUR.cfg['project']}  "
+
+    def is_tracker(p):
+        import urllib.request
+        try:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{p}/api/config", timeout=1) as r:
+                return "projects" in json.loads(r.read())
+        except Exception:
+            return False
+
+    srv = port = None
+    for port in ([want] if want else range(8611, 8621)):
+        try:
+            srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            break
+        except OSError:
+            if is_tracker(port):
+                # Clean exit so a launchd/systemd KeepAlive doesn't
+                # respawn-loop against an already-running instance.
+                print(f"tracker: already running at http://127.0.0.1:{port}")
+                sys.exit(0)
+            # port owned by some other process - try the next one
+    if srv is None:
+        print(f"tracker: no free port ({want or '8611-8620'})")
+        sys.exit(1)
+    url = f"http://127.0.0.1:{port}"
+    # Record the live URL so `kbuba get-url` can always recover it.
+    STATE_HOME.mkdir(parents=True, exist_ok=True)
+    (STATE_HOME / "url").write_text(url)
+    print(f"tracker: {url}  project={CUR.cfg['project']}  "
           f"data={CUR.data.name}  orch={CUR.orch}")
     srv.serve_forever()

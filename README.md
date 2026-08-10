@@ -41,22 +41,52 @@ bash ~/projects/kbuba/install.sh
 Everything the CLI does is plain Python (`kbuba.py`) - if a shim is not
 possible, `python3 /path/to/kbuba.py setup-folder` is equivalent.
 
-**Tracker at login (optional):** macOS `bash tracker/install-autostart.sh`
-(LaunchAgent); Linux: `autostart/kbuba-tracker.service` (systemd user
-unit, instructions inside); Windows: a Task Scheduler logon task running
-`python C:\path\to\kbuba\tracker\serve.py`.
+## Create a project - the exact flow
 
-## Use
+**macOS / Linux:**
 
 ```sh
 mkdir my-project && cd my-project
 kbuba setup-folder "My Project"     # name defaults to the folder name
-python3 tracker/serve.py            # board at http://127.0.0.1:8611
 ```
+
+**Windows (PowerShell or cmd):**
+
+```bat
+mkdir my-project & cd my-project
+kbuba setup-folder "My Project"
+```
+
+`setup-folder` ends by asking **"Launch the tracker at login?"** -
+answer yes and the tracker becomes a background process that is always
+on (LaunchAgent on macOS, systemd user unit on Linux, Task Scheduler
+logon task on Windows; also installable later with `kbuba autostart`).
+If you decline, you must run the tracker yourself in a **separate
+terminal and keep it open** while you work:
+`python3 tracker/serve.py` (macOS/Linux) / `python tracker\serve.py`
+(Windows). In non-interactive runs the question is answered with
+`--autostart` / `--no-autostart`.
 
 Then start a Conductor: open an AI conversation in the folder whose
 first message contains `ROLE=CONDUCTOR` plus your product intent. Every
 other conversation is an Implementer and waits for a task packet.
+
+## The tracker URL - bookmark it
+
+The board lives at **http://127.0.0.1:8611** and one server carries
+every project (header dropdown switches). If that port is taken by
+another process the server moves to the next free one (8611-8620) and
+records where it landed - so the URL to trust is whatever this prints:
+
+```sh
+kbuba get-url
+```
+
+**Instructions for AI agents:** after `setup-folder` (and after
+installing autostart), run `kbuba get-url` and TELL YOUR USER the exact
+URL in your reply, telling them to BOOKMARK it in their browser and
+that `kbuba get-url` recovers it if they forget. Never assume 8611 -
+always report what `get-url` returns.
 
 ## What setup-folder creates
 

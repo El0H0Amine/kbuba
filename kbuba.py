@@ -2,14 +2,20 @@
 """kbuba - scaffold an AI Conductor/Implementer orchestration system +
 tracker board into the current directory. Cross-platform, stdlib only.
 
-    kbuba setup-folder ["Project Name"] [--no-ponytail]
+    kbuba setup-folder ["Project Name"] [--no-ponytail] [--autostart|--no-autostart]
                                           scaffold into the CURRENT dir
+    kbuba get-url                         print the live tracker URL (bookmark it)
+    kbuba autostart                       launch the tracker at login (mac/linux/win)
     kbuba ui                              open the tracker board
     kbuba help
 
 setup-folder also installs the ponytail plugin (minimal-code discipline,
 github.com/dietrichgebert/ponytail) with ultra as first-time default and
-tells you exactly what it did; skip with --no-ponytail.
+tells you exactly what it did; skip with --no-ponytail. It then asks
+whether the tracker should launch at login (the flags answer it
+non-interactively); declining means running the tracker manually in a
+separate terminal. If the default port is taken by another process the
+server moves to the next free one - `kbuba get-url` always finds it.
 
 setup-folder creates: CLAUDE.md/AGENTS.md agent entry points,
 orchestration/ (Conductor+Implementer protocol, seed ledgers), tracker/
@@ -87,9 +93,6 @@ def setup_folder(name):
     print(f"scaffolded '{name}' in {cwd}")
     print("next: fill the project paragraph in CLAUDE.md, then:")
     print("  git add -A && git commit -m 'scaffold: kbuba setup-folder'")
-    print("run the board with: python3 tracker/serve.py  ->  http://127.0.0.1:8611")
-    print("(multi-project switcher: repos under a registry root are discovered "
-          "automatically; roots live in ~/.local/state/kbuba-tracker/registry.json)")
 
 
 def install_ponytail():
@@ -123,18 +126,112 @@ def install_ponytail():
         print(f"  then set ultra as default in {cfg}")
 
 
+PY = "python" if os.name == "nt" else "python3"
+
+
+def tracker_url():
+    """(url, alive) - the last URL the server recorded, probed live."""
+    import urllib.request
+    f = Path.home() / ".local" / "state" / "kbuba-tracker" / "url"
+    url = f.read_text().strip() if f.exists() else "http://127.0.0.1:8611"
+    try:
+        urllib.request.urlopen(url + "/api/config", timeout=1)
+        return url, True
+    except Exception:
+        return url, False
+
+
+def get_url():
+    url, alive = tracker_url()
+    if alive:
+        print(f"tracker UI: {url}")
+        print("bookmark this URL - if the usual port is ever taken, the "
+              "server moves to the next free one and this command finds it")
+    else:
+        print(f"tracker is NOT running (last known: {url})")
+        print(f"start it:  {PY} \"{HERE / 'tracker' / 'serve.py'}\"")
+        print("or install launch-at-login:  kbuba autostart")
+    return alive
+
+
+def autostart_install():
+    """Launch the tracker at login, per OS. Points at THIS clone's
+    serve.py - one server carries every project via the switcher."""
+    serve = HERE / "tracker" / "serve.py"
+    if sys.platform == "darwin":
+        r = run("bash", str(HERE / "tracker" / "install-autostart.sh"))
+        ok = r.returncode == 0
+    elif os.name == "nt":
+        pyw = Path(sys.executable).with_name("pythonw.exe")
+        exe = pyw if pyw.exists() else Path(sys.executable)
+        r = run("schtasks", "/Create", "/SC", "ONLOGON", "/TN", "kbuba-tracker",
+                "/TR", f'"{exe}" "{serve}"', "/F")
+        ok = r.returncode == 0
+    else:
+        unit = Path.home() / ".config" / "systemd" / "user" / "kbuba-tracker.service"
+        unit.parent.mkdir(parents=True, exist_ok=True)
+        unit.write_text(f"""[Unit]
+Description=kbuba project tracker
+
+[Service]
+ExecStart={sys.executable} {serve}
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+""")
+        run("systemctl", "--user", "daemon-reload")
+        ok = run("systemctl", "--user", "enable", "--now",
+                 "kbuba-tracker").returncode == 0
+    print("autostart: INSTALLED - tracker launches at login" if ok else
+          "autostart: install FAILED (see output above) - run the tracker "
+          f"manually: {PY} \"{serve}\"")
+    return ok
+
+
+MANUAL_MSG = (f"tracker will NOT auto-start: run  {PY} tracker/serve.py  "
+              "in a separate terminal and KEEP IT OPEN while you work")
+
+
 def main():
-    args = [a for a in sys.argv[1:] if a != "--no-ponytail"]
-    no_ponytail = "--no-ponytail" in sys.argv
+    flags = {a for a in sys.argv[1:] if a.startswith("--")}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
     cmd = args[0] if args else "help"
     if cmd == "setup-folder":
         setup_folder(args[1] if len(args) > 1 else Path.cwd().name)
-        if no_ponytail:
+        if "--no-ponytail" in flags:
             print("ponytail: skipped (--no-ponytail)")
         else:
             install_ponytail()
+        # tracker always-on question (flags win; TTY asks; non-TTY - an AI
+        # driving this - gets both options to relay to its user)
+        if "--autostart" in flags:
+            autostart_install()
+        elif "--no-autostart" in flags:
+            print(MANUAL_MSG)
+        elif sys.stdin.isatty():
+            if input("Launch the tracker at login? [Y/n] ").strip().lower() not in ("n", "no"):
+                autostart_install()
+            else:
+                print(MANUAL_MSG)
+        else:
+            print("tracker autostart: NOT configured (non-interactive run). "
+                  "ASK THE USER, then either run `kbuba autostart` or tell "
+                  f"them: {MANUAL_MSG}")
+        print()
+        get_url()
+        print("AI agents: tell your user this URL and to BOOKMARK it; "
+              "`kbuba get-url` recovers it anytime.")
+    elif cmd == "get-url":
+        get_url()
+    elif cmd == "autostart":
+        autostart_install()
     elif cmd == "ui":
-        webbrowser.open("http://127.0.0.1:8611")
+        url, alive = tracker_url()
+        if alive:
+            webbrowser.open(url)
+        else:
+            get_url()
     else:
         print(__doc__.strip())
 

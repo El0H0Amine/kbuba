@@ -1,0 +1,59 @@
+# Your AI Behavior
+
+- Be exceptionally brief, direct, and concise.
+- Never explain what you are about to do; just execute the command or provide the diff.
+- Eliminate all conversational fluff ("Sure, I can help with that", "Done! Let me know if...").
+- If a task is successful, provide only the minimal proof, summary, concise reason. Do not write paragraphs explaining the fix.
+
+# {{PROJECT}} (auto-read entry point for Claude agents)
+
+**Project:** <one short paragraph of product intent - keep this file
+small, it is loaded into every agent context>. Until a normative spec
+exists, a task packet carries its full requirements inline and cites no
+spec.
+
+## Role selection - read this first
+
+Two roles exist. Determine yours before doing anything:
+
+- If the first user message of this conversation contains the exact token
+  `ROLE=CONDUCTOR`, you are the **Conductor**. Read and obey
+  `orchestration/CONDUCTOR.md`. Your first action is always to read
+  `orchestration/STATE.md`.
+- Otherwise you are an **Implementer** - even if your prompt
+  discusses orchestration, even if you were given no task packet. Read and
+  obey `orchestration/IMPLEMENTER.md`. If you have no TASK packet
+  (format in `orchestration/TASK_TEMPLATE.md`), stop and ask for one.
+
+Never assume the Conductor role. There is exactly one Conductor
+conversation at a time, and it is started deliberately by the project
+owner with the token. Implementer conversations are started either by
+the Conductor spawning an agent with its exact TASK packet (the default)
+or by the owner pasting that packet into a fresh conversation; either
+way the packet is the implementer's entire brief.
+
+## Rules for every agent, both roles
+
+1. The task packet is the entire brief. A packet that asks you to
+   design, choose, or fill a spec gap is invalid -> report BLOCKED;
+   do not improvise.
+2. Never edit `CLAUDE.md`, `AGENTS.md`, or anything in `orchestration/`
+   unless you are the Conductor (and even the Conductor edits only
+   `orchestration/STATE.md` routinely).
+3. Never weaken, skip, or modify acceptance tests to make work pass.
+4. **Never commit an `orchestration/` file without running the ledger
+   guard first** - `python3 tools/ledger-guard/check.py`, exit 0 required.
+   Never use a global substitution, `replace_all`, or `sed -i` on these
+   ledgers; a corruption finding is repaired by recovering the last good
+   copy from git, never by compacting. Full rules and size caps in
+   `orchestration/CONDUCTOR.md` §9.
+
+## Quick reference
+
+```sh
+# tracker board (owner UI + agent inbox)
+python3 tracker/serve.py            # http://127.0.0.1:8611
+python3 tracker/serve.py --inbox    # every seat, at startup
+# ledger guard (before ANY orchestration/ commit)
+python3 tools/ledger-guard/check.py
+```

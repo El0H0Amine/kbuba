@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec python3 "$(dirname "$(python3 -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "${BASH_SOURCE[0]}")")/../kbuba.py" "$@"

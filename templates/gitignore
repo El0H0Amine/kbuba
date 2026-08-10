@@ -1,0 +1,7 @@
+__pycache__/
+.DS_Store
+# agent scratch generations (pixel-art MCP)
+pixel-art-output/
+# tracker cold storage + session audit (context-cold; keep out of agent reads)
+tracker/data/*-cold.json
+tracker/data/*-sessions.json

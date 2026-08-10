@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracker</title>
+<style>
+:root {
+  --bg: #17121c; --panel: #211a28; --panel2: #2a2133; --line: #3a2f45;
+  --text: #efe8d8; --dim: #a89bb0; --amber: #f0a952;
+  --s-discovery: #6f7d95; --s-speced: #9b7fd4; --s-implementation: #f0a952;
+  --s-review: #e07a5f; --s-done: #7fb069;
+  --d-story: #d98fa6; --d-design: #7fb4d9; --d-tech: #a9c98a; --d-cross: #d9b97f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; }
+header { display: flex; align-items: baseline; gap: 14px; padding: 16px 22px 8px; }
+header h1 { margin: 0; font-size: 20px; letter-spacing: .03em; }
+header .sub { color: var(--dim); font-size: 12px; }
+#stats { margin-left: auto; color: var(--dim); font-size: 12px; }
+nav { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--line); }
+nav button { background: none; border: none; color: var(--dim); padding: 10px 14px;
+  font: inherit; cursor: pointer; border-bottom: 2px solid transparent; }
+nav button.on { color: var(--text); border-bottom-color: var(--amber); }
+nav button:hover { color: var(--text); }
+main { padding: 16px 22px 60px; }
+section { display: none; } section.on { display: block; }
+.chip { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 11px;
+  color: #17121c; font-weight: 600; white-space: nowrap; }
+.badge-q { background: var(--amber); color: #17121c; border-radius: 999px;
+  padding: 0 7px; font-size: 11px; font-weight: 700; }
+.await { color: var(--amber); font-size: 11px; font-weight: 600; }
+.toolbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+input[type=text], select, textarea { background: var(--panel2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: inherit; }
+textarea { width: 100%; }
+button.act { background: var(--amber); color: #17121c; border: none; border-radius: 6px;
+  padding: 6px 13px; font: inherit; font-weight: 600; cursor: pointer; }
+button.ghost { background: none; border: 1px solid var(--line); color: var(--dim);
+  border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+button.ghost:hover { color: var(--text); border-color: var(--dim); }
+table { border-collapse: collapse; width: 100%; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--dim); padding: 8px 10px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--bg); z-index: 2; }
+td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:hover td { background: var(--panel); }
+td .name { font-weight: 600; }
+td .notes, td .deps { color: var(--dim); font-size: 12px; margin-top: 3px; }
+ul.mini { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--dim); }
+ul.mini li.q { color: var(--amber); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+.bigscroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 2px; color: var(--dim);
+  font-size: 12px; align-items: center; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  margin-right: 5px; vertical-align: -1px; }
+.bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden;
+  background: var(--panel2); }
+.bar div { height: 100%; }
+#depdetail, #sessdetail { position: fixed; right: 18px; top: 110px; width: 340px;
+  max-height: 70vh; overflow: auto; background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+  display: none; z-index: 5; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+pre.guard { background: #14101a; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; font-size: 12px; white-space: pre-wrap; color: var(--dim); }
+pre.guard.ok { border-color: var(--s-done); color: var(--s-done); }
+pre.guard.fail { border-color: var(--s-review); color: var(--s-review); }
+.filelist button { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+.filelist button.sel { color: var(--amber); border-color: var(--amber); }
+svg text { fill: var(--text); }
+.garrow { pointer-events: stroke; transition: stroke .12s, stroke-width .12s, opacity .12s; }
+.garrow:hover, .garrow.lit { stroke: #f0a952; stroke-width: 2.4; opacity: 1; }
+svg.dimmed .garrow:not(.lit):not(:hover) { opacity: .18; }
+.gnode.lit rect[rx="4"], .gnode.lit rect[rx="3"] { stroke: #f0a952; }
+h2 { font-size: 15px; margin: 18px 0 8px; }
+.rule { color: var(--dim); font-size: 12px; margin: 4px 0 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="proj">Tracker</h1>
+  <select id="proj-switch" title="switch project" style="display:none;margin-left:10px"></select>
+  <span class="sub">Conductor board</span>
+  <div id="stats"></div>
+</header>
+<nav id="tabs">
+  <button data-tab="board" class="on">Board</button>
+  <button data-tab="chart">Charts</button>
+  <button data-tab="deps">Dependencies</button>
+  <button data-tab="questions">Questions <span id="qbadge" class="badge-q"></span></button>
+  <button data-tab="orch">Orchestration</button>
+</nav>
+<main>
+  <section id="board" class="on">
+    <div class="toolbar">
+      <input type="text" id="f-search" placeholder="search steps...">
+      <select id="f-domain"><option value="">All domains</option></select>
+      <select id="f-stage"><option value="">All stages</option></select>
+      <button class="ghost" id="add-step">+ Add step</button>
+      <span class="rule" style="margin:0 0 0 auto">A question on the board = work paused, awaiting owner. Done requires S/D/T/O review (O = Owner verified), then the step is archived with one lesson.</span>
+    </div>
+    <div id="board-table"></div>
+  </section>
+  <section id="chart"><div id="chart-body"></div></section>
+  <section id="deps">
+    <div class="legend" id="deps-legend"></div>
+    <div class="bigscroll"><div id="deps-graph"></div></div>
+    <div id="depdetail"></div>
+  </section>
+  <section id="questions"><div id="q-body"></div></section>
+  <div id="sessdetail"></div>
+  <section id="orch">
+    <p class="rule">Every save runs the ledger guard; a failing guard restores the previous file automatically. Never bulk-substitute in ledgers.</p>
+    <div class="card">
+      <h2 style="margin-top:0">Implementer dispatch policy</h2>
+      <p class="rule" style="margin-top:0">Applies to spawned implementer subagents. Changes land in the Conductor's inbox with a read-receipt; the current dispatch(es) finish under the old policy.</p>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:end">
+        <div><b>Implementer</b><br>
+          <select id="dp-model"><option>Opus 5</option><option>Sonnet 5</option><option>Fable 5</option><option>Haiku 4.5</option></select>
+          <select id="dp-think"><option>low</option><option>medium</option><option>high</option><option>extra</option><option>max</option></select>
+        </div>
+        <div><b>Reviewer</b> <span class="notes">(first-line review of implementer output packets)</span><br>
+          <select id="dp-rmodel"><option>Opus 5</option><option>Sonnet 5</option><option>Fable 5</option><option>Haiku 4.5</option></select>
+          <select id="dp-rthink"><option>low</option><option>medium</option><option>high</option><option>extra</option><option>max</option></select>
+        </div>
+        <button class="act" id="dp-save">Set policy</button>
+        <span class="notes" id="dp-current"></span>
+      </div>
+    </div>
+    <div id="orch-tokens" class="card"></div>
+    <div id="orch-chain" class="card"></div>
+    <div class="grid2">
+      <div class="card"><h2 style="margin-top:0">Files</h2><div class="filelist" id="orch-files"></div></div>
+      <div class="card">
+        <h2 style="margin-top:0" id="orch-name">select a file</h2>
+        <textarea id="orch-editor" rows="24" style="font-family:ui-monospace,monospace;font-size:12px" disabled></textarea>
+        <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+          <button class="act" id="orch-save" disabled>Save (runs guard)</button>
+        </div>
+        <pre class="guard" id="orch-out" style="display:none"></pre>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+const STAGES = ["Discovery", "Speced", "Implementation", "Review", "Done"];
+const SC = { Discovery: "var(--s-discovery)", Speced: "var(--s-speced)",
+  Implementation: "var(--s-implementation)", Review: "var(--s-review)", Done: "var(--s-done)" };
+const DOMAINS = ["User Story", "Product Design", "Technical", "Cross-Functional"];
+const DC = { "User Story": "var(--d-story)", "Product Design": "var(--d-design)",
+  "Technical": "var(--d-tech)", "Cross-Functional": "var(--d-cross)" };
+let doc = null, cfg = null, byId = {}, curOrch = null, sessions = [];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const openQs = it => (it.questions || []).filter(q => !q.answer);
+const today = () => new Date().toISOString().slice(0, 10);
+const STAGE_PCT = { Discovery: 5, Speced: 25, Implementation: 55, Review: 80, Done: 100 };
+const REV_KEYS = ["story", "design", "tech", "owner"];
+const fullReview = it => REV_KEYS.every(k => (it.review || {})[k]);
+function logEvent(item, kind, text, qid) {
+  (doc.inbox = doc.inbox || []).push({
+    id: "e" + Date.now() + Math.random().toString(36).slice(2, 6),
+    when: today(), item, kind, qid: qid || null, text, read: false });
+}
+function readMark(pred) { // latest matching inbox event, or null
+  const evs = (doc.inbox || []).filter(pred);
+  return evs.length ? evs[evs.length - 1] : null;
+}
+const readBadge = ev => !ev || !ev.read
+  ? `<span class="await">&#9679; not read by agent yet</span>`
+  : `<span style="color:var(--s-done);font-size:11px">&#10003; read by agent ${ev.readAt || ""}</span>`;
+const atOwnerGate = it => ["story", "design", "tech"].every(k => (it.review || {})[k])
+  && !(it.review || {}).owner;
+const checklistDone = it => !it.ownerCheck
+  || (it.ownerCheck.checklist || []).every(c => c.done);
+let collapsed = new Set();
+function world() {
+  // Live items + archived ghosts as one map, with the WBS hierarchy:
+  // parent summary tasks, leaf subtasks, duration-weighted roll-up %.
+  const ghosts = (doc.archive || []).map(a => ({ ...a, stage: "Done", ghost: true }));
+  const all = {};
+  [...doc.items, ...ghosts].forEach(i => all[i.id] = i);
+  const kids = {};
+  Object.values(all).forEach(i => {
+    if (i.parent && all[i.parent]) (kids[i.parent] = kids[i.parent] || []).push(i.id);
+  });
+  const isLeaf = id => !(kids[id] || []).length;
+  const leaves = id => isLeaf(id) ? [id] : kids[id].flatMap(leaves);
+  const pctOf = it => it.ghost ? 100 : it.progress != null ? it.progress : STAGE_PCT[it.stage] || 0;
+  const dur = it => it.days != null ? it.days : 4;
+  const rollup = id => {
+    const ls = leaves(id).map(x => all[x]);
+    const tot = ls.reduce((s, l) => s + dur(l), 0) || 1;
+    return Math.round(ls.reduce((s, l) => s + pctOf(l) * dur(l), 0) / tot);
+  };
+  const depth = id => all[id].parent && all[all[id].parent] ? 1 + depth(all[id].parent) : 0;
+  return { all, kids, isLeaf, leaves, pctOf, dur, rollup, depth };
+}
+const qHistory = q => (q.history || []).length
+  ? `<details class="notes" style="margin:6px 0"><summary>${q.history.length} earlier exchange(s)</summary>
+     ${q.history.map(h => `<div style="margin:6px 0 0 12px">Q: ${esc(h.text)}<br>A: ${esc(h.answer || "")} <span class="notes">(${h.answeredAt || ""})</span></div>`).join("")}
+     </details>` : "";
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", body: JSON.stringify(body) } : undefined);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+async function load() {
+  cfg = await api("/api/config");
+  doc = await api("/api/tracker");
+  sessions = await api("/api/sessions");
+  document.title = cfg.project + " tracker";
+  $("#proj").textContent = cfg.project;
+  const sw = $("#proj-switch");
+  if ((cfg.projects || []).length > 1) {
+    sw.innerHTML = cfg.projects.map(p =>
+      `<option value="${esc(p.dir)}"${p.dir === cfg.current ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+    sw.style.display = "";
+    sw.onchange = async e => {
+      await api("/api/project", { dir: e.target.value });
+      location.reload();
+    };
+  }
+  index(); render();
+}
+function index() { byId = {}; for (const it of doc.items) byId[it.id] = it; }
+async function save() {
+  try {
+    const r = await api("/api/tracker", doc);
+    doc.rev = r.rev;
+  } catch (e) {
+    alert(e.message);
+    doc = await api("/api/tracker");
+  }
+  index(); render();
+}
+
+function stats() {
+  const w = world();
+  const leaves = Object.values(w.all).filter(i => w.isLeaf(i.id));
+  const tot = leaves.reduce((s, l) => s + w.dur(l), 0) || 1;
+  const overall = Math.round(leaves.reduce((s, l) => s + w.pctOf(l) * w.dur(l), 0) / tot);
+  const done = leaves.filter(i => i.ghost || i.stage === "Done").length;
+  const q = doc.items.reduce((n, i) => n + openQs(i).length, 0);
+  $("#stats").textContent = `${leaves.length} subtasks · ${done} done · ${overall}% complete (day-weighted) · ${q} open questions · rev ${doc.rev}`;
+  $("#qbadge").textContent = q || "";
+  $("#qbadge").style.display = q ? "" : "none";
+}
+
+/* ---------- Board ---------- */
+function stageSelect(it) {
+  const oq = openQs(it).length;
+  const full = fullReview(it);
+  return `<select data-act="stage" data-id="${it.id}">` + STAGES.map(s => {
+    let dis = "";
+    if (it.stage === "Discovery" && s !== "Discovery" && oq)
+      dis = "disabled"; // Rule of Spec: answer the board first
+    if (s === "Done" && (!full || oq)) dis = "disabled";
+    return `<option ${dis} ${s === it.stage ? "selected" : ""}>${s}</option>`;
+  }).join("") + "</select>" +
+  (oq ? `<div class="await">&#9888; awaiting owner</div>` : "") +
+  (it.stage === "Done" && full
+    ? `<div><button class="ghost" data-act="arch" data-id="${it.id}" style="margin-top:6px">archive</button></div>` : "");
+}
+function renderBoard() {
+  const s = $("#f-search").value.toLowerCase(), fd = $("#f-domain").value, fs = $("#f-stage").value;
+  const rows = doc.items.filter(it =>
+    (!s || (it.name + " " + (it.notes || "")).toLowerCase().includes(s)) &&
+    (!fd || it.domain === fd) && (!fs || it.stage === fs)
+  ).map(it => {
+    const bDepth = (x => { let n = 0, c = x; while (c.parent && byId[c.parent]) { n++; c = byId[c.parent]; } return n; })(it);
+    const isSummary = doc.items.some(x => x.parent === it.id);
+    const deps = (it.deps || []).map(d => {
+      const a = (doc.archive || []).find(x => x.id === d);
+      const done = a || (byId[d] && byId[d].stage === "Done");
+      return `<span style="color:${done ? "var(--s-done)" : "var(--amber)"}">${esc(a ? a.name + " (archived)" : byId[d] ? byId[d].name : d)}</span>`;
+    }).join(", ");
+    const qs = openQs(it).map(q => `<li class="q">${esc(q.text)}</li>`).join("");
+    const na = (it.questions || []).length - openQs(it).length;
+    const unreadD = new Set((doc.inbox || []).filter(e =>
+      e.item === it.id && e.kind === "decision" && !e.read).map(e => e.text));
+    const ds = (it.decisions || []).slice(-3).map(d =>
+      `<li${unreadD.has(d) ? ' class="q" title="not read by agent yet"' : ""}>${unreadD.has(d) ? "&#9679; " : ""}${esc(d)}</li>`).join("");
+    const more = (it.decisions || []).length > 3 ? `<li>... ${it.decisions.length - 3} more</li>` : "";
+    const r = it.review || {};
+    const cb = k => {
+      const gate = k === "owner" && it.ownerCheck && !checklistDone(it);
+      return `<label style="margin-right:8px;font-size:12px${gate ? ";opacity:.45" : ""}" title="${k === "owner" ? (gate ? "Owner verified - complete the owner-gate checklist on the Questions tab first" : "Owner verified") : k}"><input type="checkbox" data-act="rev" data-id="${it.id}" data-k="${k}" ${gate ? "disabled" : ""} ${r[k] ? "checked" : ""}> ${k[0].toUpperCase()}</label>`;
+    };
+    const gateInfo = atOwnerGate(it) && it.ownerCheck
+      ? `<div class="await" title="Exact commands + checklist wait on the Questions tab">&#9432; owner gate ready - Questions tab</div>` : "";
+    return `<tr>
+      <td style="min-width:230px;padding-left:${10 + bDepth * 22}px"><div class="name">${isSummary ? "&#9662; " : ""}${esc(it.name)}</div>
+        ${it.notes ? `<div class="notes">${esc(it.notes)}</div>` : ""}
+        ${deps ? `<div class="deps">needs: ${deps}</div>` : ""}</td>
+      <td><span class="chip" style="background:${DC[it.domain]}">${it.domain}</span></td>
+      <td style="min-width:130px">${stageSelect(it)}</td>
+      <td style="min-width:220px">${qs ? `<ul class="mini">${qs}</ul>` : `<span class="notes">-</span>`}
+        ${na ? `<div class="notes">${na} answered</div>` : ""}
+        <button class="ghost" data-act="addq" data-id="${it.id}">+ question</button></td>
+      <td style="min-width:240px">${ds ? `<ul class="mini">${ds}${more}</ul>` : `<span class="notes">-</span>`}
+        <button class="ghost" data-act="addd" data-id="${it.id}">+ decision</button></td>
+      <td style="white-space:nowrap">${cb("story")}${cb("design")}${cb("tech")}${cb("owner")}${gateInfo}</td>
+    </tr>`;
+  }).join("");
+  const arch = (doc.archive || []).map(a =>
+    `<li style="cursor:pointer" data-cold="${a.id}" title="click to pull up the full frozen record from cold storage"><b>${esc(a.name)}</b> <span class="notes">(${a.when || ""})</span> - ${esc(a.lesson || "")} <span class="notes">&#128269;</span></li>`).join("");
+  $("#board-table").innerHTML = `<table><thead><tr>
+    <th>Step / Feature</th><th>Domain</th><th>Stage</th>
+    <th>Pending Conductor Questions</th><th>Decision Log</th><th>Review S/D/T/O</th>
+    </tr></thead><tbody>${rows}</tbody></table>` +
+    (arch ? `<h2>Archived - one lesson each (${doc.archive.length})</h2><ul class="mini">${arch}</ul>` : "");
+}
+document.addEventListener("change", e => {
+  const t = e.target, id = t.dataset.id;
+  if (t.dataset.act === "stage") {
+    byId[id].stage = t.value;
+    logEvent(id, "stage", `stage -> ${t.value}`); save();
+  }
+  if (t.dataset.act === "rev") {
+    byId[id].review = byId[id].review || {};
+    byId[id].review[t.dataset.k] = t.checked;
+    logEvent(id, "review", `${t.dataset.k} = ${t.checked}`); save();
+  }
+});
+document.addEventListener("click", e => {
+  const t = e.target, id = t.dataset.id;
+  if (t.dataset.act === "addq") {
+    const v = prompt("New Conductor question (owner-level only - draft specs yourself):");
+    if (v) {
+      const qid = "q" + Date.now();
+      byId[id].questions.push({ id: qid, text: v, answer: null, answeredAt: null, asked: today() });
+      logEvent(id, "question", v, qid); save();
+    }
+  }
+  if (t.dataset.act === "addd") {
+    const v = prompt("Decision to log:");
+    if (v) { byId[id].decisions.push(v); logEvent(id, "decision", v); save(); }
+  }
+  const coldLi = t.closest("[data-cold]");
+  if (coldLi) { coldDetail(coldLi.dataset.cold); return; }
+  if (t.dataset.act === "arch") {
+    const lesson = prompt("One half-sentence: what did we learn from this step? (Everything else - answers, history, notes - goes to cold storage; only decisions + this lesson stay.)");
+    if (!lesson) return;
+    const it = byId[id];
+    (doc.archive = doc.archive || []).push({ ...it, lesson, when: today() });
+    doc.items = doc.items.filter(x => x.id !== id);
+    logEvent(id, "archive", lesson); save();
+  }
+});
+$("#add-step").onclick = () => {
+  const name = prompt("Step / feature name:");
+  if (!name) return;
+  const domain = prompt("Domain: " + DOMAINS.join(" | "), "Technical");
+  const nid = "it" + Date.now();
+  doc.items.push({ id: nid, name, domain: DOMAINS.includes(domain) ? domain : "Technical",
+    stage: "Discovery", deps: [], questions: [], decisions: [],
+    review: { story: false, design: false, tech: false, owner: false }, notes: "" });
+  logEvent(nid, "step", name);
+  save();
+};
+for (const id of ["f-search", "f-domain", "f-stage"])
+  $("#" + id).addEventListener("input", renderBoard);
+
+/* ---------- Charts ---------- */
+function renderChart() {
+  // Weighted like the task roll-ups: leaf subtasks only (summary tasks
+  // excluded), archived ghosts count as Done at 100%, weight = days.
+  const w = world();
+  const leaves = Object.values(w.all).filter(i => w.isLeaf(i.id));
+  const totDays = leaves.reduce((s, l) => s + w.dur(l), 0) || 1;
+  const overall = Math.round(leaves.reduce((s, l) => s + w.pctOf(l) * w.dur(l), 0) / totDays);
+  const count = (pred) => leaves.filter(pred).length;
+  const seg = STAGES.map(s => [s, count(i => (i.ghost ? "Done" : i.stage) === s)]).filter(x => x[1]);
+  const total = leaves.length;
+  let acc = 0;
+  const stops = seg.map(([s, n]) => {
+    const a = acc / total * 360; acc += n;
+    return `${SC[s]} ${a}deg ${acc / total * 360}deg`;
+  }).join(", ");
+  const donut = `<div style="display:flex;gap:22px;align-items:center">
+    <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(${stops});
+      display:grid;place-items:center">
+      <div style="width:96px;height:96px;border-radius:50%;background:var(--panel);
+        display:grid;place-items:center;text-align:center">
+        <div><b style="font-size:22px">${overall}%</b>
+        <div class="notes" style="font-size:11px">complete<br>(day-weighted)</div></div></div></div>
+    <div class="legend" style="flex-direction:column;align-items:flex-start">
+      ${seg.map(([s, n]) => `<span><span class="dot" style="background:${SC[s]}"></span>${s}: ${n}${s === "Done" && leaves.some(l => l.ghost) ? ` (${leaves.filter(l => l.ghost).length} archived)` : ""}</span>`).join("")}
+      <span class="notes">weight = per-step <code>days</code> (default 4), same math as the task roll-ups</span>
+    </div></div>`;
+  const bars = DOMAINS.map(d => {
+    const items = leaves.filter(i => i.domain === d);
+    if (!items.length) return "";
+    const cells = STAGES.map(s => {
+      const n = items.filter(i => (i.ghost ? "Done" : i.stage) === s).length;
+      return n ? `<div style="background:${SC[s]};width:${100 * n / items.length}%" title="${s}: ${n}"></div>` : "";
+    }).join("");
+    const q = items.reduce((n, i) => n + (i.ghost ? 0 : openQs(i).length), 0);
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span><span class="dot" style="background:${DC[d]}"></span><b>${d}</b> · ${items.length} subtasks</span>
+        <span class="notes">${q ? q + " open question" + (q > 1 ? "s" : "") : ""}</span></div>
+      <div class="bar">${cells}</div></div>`;
+  }).join("");
+  const paused = doc.items.filter(i => openQs(i).length);
+  const wireGantt = () => document.querySelectorAll(".gnode").forEach(n => {
+    n.addEventListener("click", () => {
+      if (n.dataset.kind === "parent") {
+        collapsed.has(n.dataset.id) ? collapsed.delete(n.dataset.id) : collapsed.add(n.dataset.id);
+        renderChart();
+      } else n.dataset.ghost ? coldDetail(n.dataset.id) : sessDetail(n.dataset.id);
+    });
+    // hovering a row lights every arrow in and out of it (and the rows
+    // at their far ends); everything else dims
+    n.addEventListener("mouseenter", () => {
+      const id = n.dataset.id, svg = n.closest("svg");
+      let any = false;
+      svg.querySelectorAll(`.garrow[data-src="${id}"], .garrow[data-dst="${id}"]`).forEach(a => {
+        any = true;
+        a.classList.add("lit");
+        for (const far of [a.dataset.src, a.dataset.dst])
+          if (far !== id) svg.querySelectorAll(`.gnode[data-id="${far}"]`).forEach(x => x.classList.add("lit"));
+      });
+      if (any) svg.classList.add("dimmed");
+    });
+    n.addEventListener("mouseleave", () => {
+      const svg = n.closest("svg");
+      svg.classList.remove("dimmed");
+      svg.querySelectorAll(".lit").forEach(x => x.classList.remove("lit"));
+    });
+  });
+  setTimeout(wireGantt, 0);
+  $("#chart-body").innerHTML = `<div class="grid2">
+    <div class="card"><h2 style="margin-top:0">Overall</h2>${donut}</div>
+    <div class="card"><h2 style="margin-top:0">By domain (stacked by stage)</h2>${bars}
+      <div class="legend">${STAGES.map(s => `<span><span class="dot" style="background:${SC[s]}"></span>${s}</span>`).join("")}</div></div>
+    </div>
+    <div class="card"><h2 style="margin-top:0">Gantt (dependency-scheduled, day 0 = today)</h2>
+      <p class="rule" style="margin-top:0"><b style="color:var(--amber)">Bold rows are tasks</b> (thin bar = span, % rolls up from subtasks; click to collapse/expand &#9662;/&#9656;). Leaf bars: <code>days</code> span, fill = % done; rows sharing a start run in <b>parallel</b>. <span style="color:var(--d-design)">&#8649;</span> = dispatchable to parallel subagents · &#9873;n = implementer sessions (click a subtask for the audit trail) · <b style="color:var(--amber)">&#9679; = awaiting owner</b> (open question on that step). <span style="color:var(--amber)">Elbow arrows = the gating dependency (finish&#8594;start)</span> - they answer "why does this bar start here"; deps already satisfied draw no arrow (see the Dependencies tab for the full graph). A task never gates its subtasks - only subtask-level deps schedule.</p>
+      <div style="overflow-x:auto">${gantt()}</div></div>
+    <div class="card"><h2 style="margin-top:0">Paused - awaiting owner (${paused.length})</h2>
+      ${paused.length ? `<ul class="mini">${paused.map(i => `<li class="q"><b>${esc(i.name)}</b>: ${openQs(i).map(q => esc(q.text)).join(" · ")}</li>`).join("")}</ul>` : `<span class="notes">nothing paused</span>`}</div>`;
+}
+
+function gantt() {
+  const w = world(), { all, kids, isLeaf, pctOf, dur } = w;
+  const memo = {};
+  const startOf = (id, seen) => {
+    if (id in memo) return memo[id];
+    const it = all[id];
+    if (!it || seen.has(id)) return 0;
+    seen.add(id);
+    if (it.ghost) return memo[id] = it.startDay != null ? it.startDay : 0;
+    memo[id] = it.startDay != null ? it.startDay :
+      (it.deps || []).reduce((m, d) =>
+        all[d] && isLeaf(d) ? Math.max(m, startOf(d, seen) +
+          ((all[d].ghost || all[d].stage === "Done") ? 0 : dur(all[d]))) : m, 0);
+    return memo[id];
+  };
+  Object.keys(all).forEach(id => { if (isLeaf(id)) startOf(id, new Set()); });
+  const spanOf = id => {
+    const ls = w.leaves(id);
+    return [Math.min(...ls.map(x => memo[x])),
+            Math.max(...ls.map(x => memo[x] + dur(all[x])))];
+  };
+  const key = i => isLeaf(i.id) ? memo[i.id] : spanOf(i.id)[0];
+  const roots = Object.values(all).filter(i => !i.parent || !all[i.parent])
+    .sort((a, b) => key(a) - key(b) || a.name.localeCompare(b.name));
+  const rows = [];
+  const walk = i => {
+    rows.push(i);
+    if (!isLeaf(i.id) && !collapsed.has(i.id))
+      (kids[i.id] || []).map(k => all[k])
+        .sort((a, b) => key(a) - key(b) || a.name.localeCompare(b.name)).forEach(walk);
+  };
+  roots.forEach(walk);
+  const LAB = 260, RH = 26, TOP = 26;
+  const span = Math.max(...Object.keys(all).filter(isLeaf)
+    .map(id => memo[id] + dur(all[id]))) + 2;
+  // fill the available width: px-per-day derived from the container
+  const holder = document.querySelector("#chart-body");
+  const availW = (holder && holder.clientWidth) || 1200;
+  const PPD = Math.max(13, Math.floor((availW - LAB - 110) / span));
+  const W = LAB + span * PPD + 70, H = TOP + rows.length * RH + 8;
+  let g = "";
+  for (let d = 0; d <= span; d += 7)
+    g += `<line x1="${LAB + d * PPD}" y1="${TOP - 6}" x2="${LAB + d * PPD}" y2="${H}" stroke="var(--line)"/>
+      <text x="${LAB + d * PPD + 3}" y="${TOP - 10}" font-size="10" fill="var(--dim)" style="fill:var(--dim)">+${d}d</text>`;
+  // finish->start connectors: WHY a bar starts where it does. Drawn only
+  // for gating (not-yet-done) predecessors; satisfied deps don't gate and
+  // stay in the dependency graph. When an endpoint is hidden inside a
+  // collapsed task, the arrow re-routes to that task's summary bar;
+  // arrows fully inside one collapsed task disappear.
+  const rowIdx = {};
+  rows.forEach((it, r) => rowIdx[it.id] = r);
+  const vis = id => { let c = id; while (c && !(c in rowIdx)) c = all[c] && all[c].parent; return c; };
+  const startX = id => LAB + (isLeaf(id) ? memo[id] : spanOf(id)[0]) * PPD;
+  const endX = id => LAB + (isLeaf(id) ? memo[id] + dur(all[id]) : spanOf(id)[1]) * PPD;
+  const rowY = id => TOP + rowIdx[id] * RH + 11;
+  const drawn = new Set();
+  for (const it of Object.values(all)) {
+    if (!isLeaf(it.id) || it.ghost) continue;
+    for (const d of it.deps || []) {
+      const p = all[d];
+      if (!p || !isLeaf(d) || p.ghost || p.stage === "Done") continue;
+      const src = vis(d), dst = vis(it.id);
+      if (!src || !dst || src === dst) continue;
+      const key = src + ">" + dst;
+      if (drawn.has(key)) continue;
+      drawn.add(key);
+      const x1 = endX(src), y1 = rowY(src), x2 = startX(dst), y2 = rowY(dst);
+      const dx = Math.min(Math.max((x2 - x1) * 0.6, 18), 70);
+      g += `<path class="garrow" data-src="${src}" data-dst="${dst}"
+        d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}"
+        fill="none" stroke="rgba(240,169,82,.5)" stroke-width="1.4" marker-end="url(#garr)"/>`;
+    }
+  }
+  rows.forEach((it, r) => {
+    const y = TOP + r * RH, ind = 6 + w.depth(it.id) * 16;
+    const ns = sessions.filter(s => s.item === it.id).length;
+    if (!isLeaf(it.id)) {
+      const [s0, s1] = spanOf(it.id);
+      const x = LAB + s0 * PPD, wd = Math.max((s1 - s0) * PPD, 10);
+      const pct = w.rollup(it.id);
+      const name = it.name.length > 29 ? it.name.slice(0, 28) + "…" : it.name;
+      g += `<g class="gnode" data-id="${it.id}" data-kind="parent" style="cursor:pointer">
+        <rect x="0" y="${y}" width="${W}" height="${RH - 2}" fill="transparent"/>
+        <text x="${ind}" y="${y + 16}" font-size="11" fill="var(--amber)" style="fill:var(--amber)">${collapsed.has(it.id) ? "&#9656;" : "&#9662;"}</text>
+        <text x="${ind + 14}" y="${y + 16}" font-size="11" font-weight="700">${esc(name)}</text>
+        <rect x="${x}" y="${y + 8}" width="${wd}" height="8" rx="3" fill="var(--panel2)" stroke="var(--line)"/>
+        <rect x="${x}" y="${y + 8}" width="${Math.max(wd * pct / 100, pct ? 3 : 0)}" height="8" rx="3" fill="var(--amber)"/>
+        <text x="${x + wd + 6}" y="${y + 16}" font-size="10" font-weight="700" fill="var(--amber)" style="fill:var(--amber)">${pct}%</text>
+      </g>`;
+      return;
+    }
+    const x = LAB + memo[it.id] * PPD, wd = Math.max(dur(it) * PPD, 8);
+    const pct = pctOf(it);
+    const name = it.name.length > 29 ? it.name.slice(0, 28) + "…" : it.name;
+    g += `<g class="gnode" data-id="${it.id}" data-ghost="${it.ghost ? 1 : ""}" style="cursor:pointer"${it.ghost ? ' opacity=".45"' : ""}>
+      <rect x="0" y="${y}" width="${W}" height="${RH - 2}" fill="transparent"/>
+      ${it.agent ? `<text x="${ind}" y="${y + 15}" font-size="11" fill="var(--d-design)" style="fill:var(--d-design)" title="dispatchable to parallel subagents">&#8649;</text>` : ""}
+      <text x="${ind + 14}" y="${y + 15}" font-size="11"${it.ghost ? ' font-style="italic"' : ""}>${esc(name)}</text>
+      <rect x="${x}" y="${y + 3}" width="${wd}" height="16" rx="4" fill="var(--panel2)" stroke="var(--line)"${it.ghost ? ' stroke-dasharray="3,3"' : ""}/>
+      <rect x="${x}" y="${y + 3}" width="${Math.max(wd * pct / 100, pct ? 3 : 0)}" height="16" rx="4" fill="${SC[it.stage]}"/>
+      <text x="${x + wd + 6}" y="${y + 15}" font-size="10" fill="${SC[it.stage]}" style="fill:${SC[it.stage]}">${it.ghost ? "archived" : pct + "%"}${openQs(it).length ? " &#9679;" : ""}${ns ? `  &#9873;${ns}` : ""}</text>
+    </g>`;
+  });
+  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="garr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="rgba(240,169,82,.8)"/></marker></defs>${g}</svg>`;
+}
+
+async function coldDetail(id) {
+  const recs = await api("/api/cold?id=" + encodeURIComponent(id));
+  const d = $("#sessdetail");
+  if (!recs.length) { d.innerHTML = `<b>no cold record for ${esc(id)}</b>`; d.style.display = "block"; return; }
+  const c = recs[recs.length - 1], it = c.item;
+  const qs = (it.questions || []).map(q => `<div style="margin:8px 0;border-left:3px solid var(--line);padding-left:10px">
+      <div class="notes">Q: ${esc(q.text)}</div>${qHistory(q)}
+      <div style="white-space:pre-wrap">A: ${esc(q.answer || "-")}</div></div>`).join("");
+  const oc = it.ownerCheck;
+  d.innerHTML = `<div style="display:flex;justify-content:space-between">
+      <b>${esc(it.name)} <span class="notes">(cold record)</span></b>
+      <button class="ghost" onclick="this.closest('#sessdetail').style.display='none'">x</button></div>
+    <div style="margin:6px 0"><span class="chip" style="background:${DC[it.domain]}">${it.domain}</span>
+      <span class="chip" style="background:${SC.Done}">archived ${c.archivedAt || ""}</span></div>
+    ${it.notes ? `<div class="notes">${esc(it.notes)}</div>` : ""}
+    ${(it.decisions || []).length ? `<h2>Decisions</h2><ul class="mini">${it.decisions.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${qs ? `<h2>Questions &amp; answers</h2>${qs}` : ""}
+    ${oc ? `<h2>Owner gate</h2>
+      <div class="notes">checklist: ${(oc.checklist || []).map(x => (x.done ? "[x] " : "[ ] ") + esc(x.text)).join(" · ")}</div>
+      ${oc.comment ? `<div style="white-space:pre-wrap;margin-top:6px;max-height:180px;overflow:auto" class="notes">${esc(oc.comment)}</div>` : ""}` : ""}
+    ${(c.inbox || []).length ? `<h2>Interaction trail</h2><ul class="mini">${c.inbox.map(e => `<li>[${e.when}] ${e.kind}: ${esc(String(e.text).slice(0, 100))}</li>`).join("")}</ul>` : ""}`;
+  d.style.display = "block";
+}
+
+function sessDetail(id) {
+  const it = byId[id], d = $("#sessdetail");
+  const rows = sessions.filter(s => s.item === id);
+  d.innerHTML = `<div style="display:flex;justify-content:space-between">
+      <b>${esc(it ? it.name : id)}</b><button class="ghost" onclick="this.closest('#sessdetail').style.display='none'">x</button></div>
+    ${it ? `<div style="margin:6px 0"><span class="chip" style="background:${SC[it.stage]}">${it.stage}</span>
+      ${it.agent ? `<span class="chip" style="background:var(--d-design)">&#8649; subagent-dispatchable</span>` : ""}</div>` : ""}
+    <h2>Implementer sessions - audit trail (${rows.length})</h2>
+    ${rows.length ? rows.map(s => `<div style="border-left:3px solid var(--line);padding-left:10px;margin:8px 0">
+      <div><code style="font-size:11px">${esc(s.session)}</code> <span class="notes">· ${esc(s.model)} · ${s.when}</span></div>
+      <div class="notes" style="margin-top:2px">${esc(s.summary || "")}</div></div>`).join("")
+    : `<span class="notes">no sessions logged yet (Conductor logs each dispatch with serve.py --log-session)</span>`}`;
+  d.style.display = "block";
+}
+
+/* ---------- Dependencies ---------- */
+function renderDeps() {
+  // Archived steps stay in the graph as ghosts: the project shape survives
+  // (X was done and preceded Y) while their content lives cold.
+  const w = world(), G = w.all;
+  const nodes = Object.values(G);
+  const lvl = {};
+  const L = (id, seen) => {
+    if (id in lvl) return lvl[id];
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const it = G[id];
+    lvl[id] = (it.deps || []).length ? 1 + Math.max(...it.deps.map(d => G[d] ? L(d, seen) : 0)) : 0;
+    return lvl[id];
+  };
+  nodes.forEach(i => L(i.id, new Set()));
+  const cols = {};
+  nodes.forEach(i => (cols[lvl[i.id]] = cols[lvl[i.id]] || []).push(i));
+  const W = 200, H = 54, GX = 90, GY = 20, PAD = 24;
+  const pos = {};
+  Object.keys(cols).forEach(c => cols[c].forEach((it, r) => {
+    pos[it.id] = { x: PAD + c * (W + GX), y: PAD + r * (H + GY) };
+  }));
+  const width = PAD * 2 + Object.keys(cols).length * (W + GX) - GX;
+  const height = PAD * 2 + Math.max(...Object.values(cols).map(c => c.length)) * (H + GY) - GY;
+  let edges = "", nodesSvg = "";
+  for (const it of nodes) {
+    for (const d of it.deps || []) {
+      if (!pos[d]) continue;
+      const a = pos[d], b = pos[it.id];
+      const done = G[d].ghost || G[d].stage === "Done";
+      const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, mx = (x1 + x2) / 2;
+      edges += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"
+        fill="none" stroke="${done ? "rgba(127,176,105,.55)" : "rgba(240,169,82,.55)"}"
+        stroke-width="1.6" marker-end="url(#arr)"/>`;
+    }
+    // WBS membership: dotted gray task-to-subtask links
+    if (it.parent && pos[it.parent]) {
+      const a = pos[it.parent], b = pos[it.id];
+      const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, mx = (x1 + x2) / 2;
+      edges += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"
+        fill="none" stroke="rgba(168,155,176,.35)" stroke-width="1.2" stroke-dasharray="4,4"/>`;
+    }
+  }
+  for (const it of nodes) {
+    const p = pos[it.id];
+    const parentNode = !w.isLeaf(it.id);
+    const ready = !parentNode && !it.ghost && it.stage !== "Done" &&
+      (it.deps || []).every(d => !G[d] || G[d].ghost || G[d].stage === "Done");
+    const oq = it.ghost ? 0 : openQs(it).length;
+    const name = it.name.length > 26 ? it.name.slice(0, 25) + "…" : it.name;
+    const sub = it.ghost ? "archived - click for the cold record"
+      : parentNode ? `task · ${w.rollup(it.id)}% · ${(w.kids[it.id] || []).length} subtasks`
+      : it.stage + (oq ? "  ·  awaiting owner" : "");
+    nodesSvg += `<g class="depnode" data-id="${it.id}" data-ghost="${it.ghost ? 1 : ""}" style="cursor:pointer"${it.ghost ? ' opacity=".45"' : ""}>
+      <rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="9"
+        fill="var(--panel2)" stroke="${ready ? "var(--s-done)" : parentNode ? "var(--amber)" : "var(--line)"}" stroke-width="${ready ? 2 : 1}"${it.ghost ? ' stroke-dasharray="4,4"' : ""}/>
+      <rect x="${p.x}" y="${p.y}" width="5" height="${H}" rx="2" fill="${parentNode ? "var(--amber)" : SC[it.stage]}"/>
+      <text x="${p.x + 14}" y="${p.y + 22}" font-size="12" font-weight="${parentNode ? 700 : 600}"${it.ghost ? ' font-style="italic"' : ""}>${esc(name)}</text>
+      <text x="${p.x + 14}" y="${p.y + 40}" font-size="10" fill="${parentNode ? "var(--amber)" : SC[it.stage]}" style="fill:${parentNode ? "var(--amber)" : SC[it.stage]}">${sub}</text>
+      ${oq ? `<circle cx="${p.x + W - 12}" cy="${p.y + 12}" r="5" fill="var(--amber)"/>` : ""}
+    </g>`;
+  }
+  $("#deps-graph").innerHTML = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#8a7f95"/></marker></defs>${edges}${nodesSvg}</svg>`;
+  $("#deps-legend").innerHTML =
+    STAGES.map(s => `<span><span class="dot" style="background:${SC[s]}"></span>${s}</span>`).join("") +
+    `<span><span class="dot" style="background:none;border:2px solid var(--s-done)"></span>ready to start (all deps done)</span>
+     <span><span class="dot" style="background:var(--amber);border-radius:50%"></span>awaiting owner</span>
+     <span><span class="dot" style="background:none;border:1px dashed var(--dim);opacity:.6"></span>archived ghost (shape kept, content cold)</span>
+     <span><span class="dot" style="background:none;border:1px solid var(--amber)"></span>summary task (roll-up %)</span>
+     <span class="notes">solid arrow = dependency · dotted gray = task&#8594;subtask · click a step for details</span>`;
+  document.querySelectorAll(".depnode").forEach(g => g.addEventListener("click", () =>
+    g.dataset.ghost ? coldDetail(g.dataset.id) : depDetail(g.dataset.id)));
+}
+function depDetail(id) {
+  const it = byId[id], d = $("#depdetail");
+  const blockers = (it.deps || []).filter(x => byId[x] && byId[x].stage !== "Done");
+  d.innerHTML = `<div style="display:flex;justify-content:space-between">
+      <b>${esc(it.name)}</b><button class="ghost" onclick="this.closest('#depdetail').style.display='none'">x</button></div>
+    <div style="margin:6px 0"><span class="chip" style="background:${DC[it.domain]}">${it.domain}</span>
+      <span class="chip" style="background:${SC[it.stage]}">${it.stage}</span></div>
+    ${it.notes ? `<div class="notes">${esc(it.notes)}</div>` : ""}
+    <h2>Blocked by</h2>${blockers.length ? `<ul class="mini">${blockers.map(b => `<li>${esc(byId[b].name)} (${byId[b].stage})</li>`).join("")}</ul>` : `<span class="notes" style="color:var(--s-done)">nothing - ready</span>`}
+    ${openQs(it).length ? `<h2>Awaiting owner</h2><ul class="mini">${openQs(it).map(q => `<li class="q">${esc(q.text)}</li>`).join("")}</ul>` : ""}
+    ${(it.decisions || []).length ? `<h2>Decisions</h2><ul class="mini">${it.decisions.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+  d.style.display = "block";
+}
+
+/* ---------- Questions ---------- */
+function ownerGates() {
+  const gates = doc.items.filter(it => atOwnerGate(it) && it.ownerCheck);
+  if (!gates.length) return "";
+  return `<h2>Owner verification gates (${gates.length})</h2>` + gates.map(it => {
+    const oc = it.ownerCheck;
+    const list = (oc.checklist || []).map((c, i) =>
+      `<label style="display:block;margin:4px 0"><input type="checkbox" data-gatecheck="${it.id}|${i}" ${c.done ? "checked" : ""}> ${esc(c.text)}</label>`).join("");
+    const done = checklistDone(it);
+    return `<div class="card" style="border-left:3px solid var(--amber)">
+      <div><span class="chip" style="background:${DC[it.domain]}">${it.domain}</span>
+        <b style="margin-left:8px">${esc(it.name)}</b></div>
+      <div style="margin:10px 0 4px"><b>&#9432; Run exactly these commands</b>
+        <button class="ghost" data-copy="${it.id}" style="margin-left:8px">copy</button></div>
+      <pre class="guard" id="cmds-${it.id}" style="user-select:all">${esc(oc.commands || "")}</pre>
+      <div style="margin-top:6px"><b>Checklist</b></div>${list}
+      <textarea rows="2" id="gc-${it.id}" placeholder="your comment...">${esc(oc.comment || "")}</textarea>
+      <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+        <button class="ghost" data-gatecomment="${it.id}">Save comment</button>
+        <button class="act" data-gateok="${it.id}" ${done ? "" : "disabled title='finish the checklist first'"}>Mark O verified</button>
+      </div></div>`;
+  }).join("");
+}
+
+function renderQuestions() {
+  // A save from any control re-renders this tab; carry unsubmitted text
+  // (comments, half-typed answers) across the rebuild so a checklist tick
+  // never wipes what the owner is writing.
+  const drafts = {};
+  document.querySelectorAll("#q-body textarea").forEach(t => {
+    if (t.id && t.value) drafts[t.id] = t.value;
+  });
+  const open = [], closed = [];
+  for (const it of doc.items) for (const q of it.questions || [])
+    (q.answer ? closed : open).push({ it, q });
+  const cards = open.map(({ it, q }, i) => {
+    const askEv = readMark(e => e.qid === q.id && e.kind === "question");
+    return `<div class="card">
+    <div style="margin-bottom:6px"><span class="chip" style="background:${DC[it.domain]}">${it.domain}</span>
+      <b style="margin-left:8px">${esc(it.name)}</b>
+      <span class="notes" style="float:right">asked ${q.asked || ""}${askEv ? " · " : ""}</span>
+      ${askEv ? `<span style="float:right;margin-right:6px">${readBadge(askEv)}</span>` : ""}</div>
+    <div style="margin-bottom:8px">${esc(q.text)}</div>
+    ${qHistory(q)}
+    <textarea rows="2" id="ans-${q.id}" placeholder="your decision..."></textarea>
+    <div style="margin-top:8px"><button class="act" data-answer="${it.id}|${q.id}" data-ta="ans-${q.id}">Answer &amp; log decision</button></div>
+  </div>`;
+  }).join("");
+  const log = closed.map(({ it, q }, i) => {
+    const ev = readMark(e => e.qid === q.id && (e.kind === "answer" || e.kind === "answer-edit"));
+    return `<div class="card" style="border-left:3px solid var(--s-done)" id="qc-${i}">
+    <b>${esc(it.name)}</b> <span class="notes">answered ${q.answeredAt || ""}</span>
+    <span style="float:right">${readBadge(ev)}</span>
+    <div class="notes" style="margin-top:4px">Q: ${esc(q.text)}</div>
+    ${qHistory(q)}
+    <div style="margin-top:4px;white-space:pre-wrap">A: ${esc(q.answer)}</div>
+    <div style="margin-top:8px"><button class="ghost" data-editq="${it.id}|${q.id}" data-card="qc-${i}">Edit answer</button></div>
+  </div>`;
+  }).join("");
+  const feed = (doc.inbox || []).slice(-50).reverse().map(e => `<li${e.read ? "" : ' class="q"'}>
+    <span class="notes">[${e.when}]</span> <b>${esc((byId[e.item] || {}).name || (doc.archive || []).find(a => a.id === e.item)?.name || e.item)}</b>
+    · ${e.kind} - ${esc(String(e.text).slice(0, 160))}${String(e.text).length > 160 ? "…" : ""}
+    ${e.read ? `<span style="color:var(--s-done)">&#10003; ${e.readAt || ""}</span>` : "&#9679; unread"}</li>`).join("");
+  $("#q-body").innerHTML = `<p class="rule">Owner decision surface. Answering moves the question into the step's decision log and unblocks its stage gate. &#9679; = the agent has not read it yet (agents sync with <code>python3 tracker/serve.py --inbox</code>; a poorly-answered question comes back via <code>--reopen</code> with the old exchange collapsed below it).</p>
+    ${ownerGates()}
+    <h2>Open (${open.length})</h2>${cards || `<span class="notes">no open questions - nothing is waiting on you</span>`}
+    <h2>Answered (${closed.length})</h2>${log || `<span class="notes">none yet</span>`}
+    <h2>Activity - everything you wrote, and whether the agent read it</h2>
+    ${feed ? `<ul class="mini">${feed}</ul>` : `<span class="notes">no activity yet</span>`}`;
+  for (const [id, v] of Object.entries(drafts)) {
+    const t = document.getElementById(id);
+    if (t) t.value = v; // the draft is newer than any prefill
+  }
+  document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+    navigator.clipboard.writeText(byId[b.dataset.copy].ownerCheck.commands || "");
+    b.textContent = "copied"; setTimeout(() => b.textContent = "copy", 1200);
+  }));
+  document.querySelectorAll("[data-gatecheck]").forEach(b => b.addEventListener("change", () => {
+    const [iid, idx] = b.dataset.gatecheck.split("|");
+    const c = byId[iid].ownerCheck.checklist[+idx];
+    c.done = b.checked;
+    logEvent(iid, "owner-check", `[${b.checked ? "x" : " "}] ${c.text}`);
+    save();
+  }));
+  document.querySelectorAll("[data-gatecomment]").forEach(b => b.addEventListener("click", async () => {
+    const iid = b.dataset.gatecomment;
+    const v = document.getElementById("gc-" + iid).value.trim();
+    byId[iid].ownerCheck.comment = v;
+    if (v) logEvent(iid, "owner-comment", v);
+    await save();
+    const nb = document.querySelector(`[data-gatecomment="${iid}"]`);
+    if (nb) { nb.textContent = "saved ✓"; setTimeout(() => nb.textContent = "Save comment", 1500); }
+  }));
+  document.querySelectorAll("[data-gateok]").forEach(b => b.addEventListener("click", () => {
+    const iid = b.dataset.gateok;
+    byId[iid].review.owner = true;
+    logEvent(iid, "review", "owner = true (gate checklist complete)");
+    save();
+  }));
+  document.querySelectorAll("[data-answer]").forEach(b => b.addEventListener("click", () => {
+    const v = document.getElementById(b.dataset.ta).value.trim();
+    if (!v) return;
+    const [iid, qid] = b.dataset.answer.split("|");
+    const q = byId[iid].questions.find(x => x.id === qid);
+    q.answer = v; q.answeredAt = today();
+    byId[iid].decisions.push(`Q: ${q.text} -> A: ${v}`);
+    logEvent(iid, "answer", v, qid);
+    save();
+  }));
+  document.querySelectorAll("[data-editq]").forEach(b => b.addEventListener("click", () => {
+    const [iid, qid] = b.dataset.editq.split("|");
+    const q = byId[iid].questions.find(x => x.id === qid);
+    const card = document.getElementById(b.dataset.card);
+    card.innerHTML = `<b>${esc(byId[iid].name)}</b>
+      <div class="notes" style="margin:4px 0">Q: ${esc(q.text)}</div>
+      <textarea rows="4" id="edit-ta">${esc(q.answer)}</textarea>
+      <div style="margin-top:8px"><button class="act" id="edit-save">Save edited answer</button></div>`;
+    card.querySelector("#edit-save").addEventListener("click", () => {
+      const v = card.querySelector("#edit-ta").value.trim();
+      if (!v) return;
+      const di = byId[iid].decisions.findIndex(d =>
+        typeof d === "string" && d.startsWith(`Q: ${q.text} -> A:`));
+      q.answer = v; q.answeredAt = today();
+      const entry = `Q: ${q.text} -> A: ${v}`;
+      if (di >= 0) byId[iid].decisions[di] = entry;
+      else byId[iid].decisions.push(entry);
+      logEvent(iid, "answer-edit", v, qid);
+      save();
+    });
+  }));
+}
+
+/* ---------- Orchestration ---------- */
+function chainSVG() {
+  const box = (x, y, w, h, label, sub, color) => `
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" fill="var(--panel2)" stroke="${color || "var(--line)"}"/>
+    <text x="${x + w / 2}" y="${y + (sub ? 24 : h / 2 + 4)}" text-anchor="middle" font-size="12" font-weight="600">${label}</text>
+    ${sub ? `<text x="${x + w / 2}" y="${y + 42}" text-anchor="middle" font-size="10" fill="var(--dim)" style="fill:var(--dim)">${sub}</text>` : ""}`;
+  const arrow = (x1, y1, x2, y2, label) => `
+    <path d="M${x1},${y1} L${x2},${y2}" stroke="#8a7f95" stroke-width="1.5" marker-end="url(#a2)"/>
+    ${label ? `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 6}" text-anchor="middle" font-size="10" fill="var(--dim)" style="fill:var(--dim)">${label}</text>` : ""}`;
+  return `<svg viewBox="0 0 960 470" width="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="a2" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#8a7f95"/></marker></defs>
+    ${box(300, 16, 170, 56, "DISPATCH POLICY", "implementer + reviewer · model + thinking", "var(--amber)")}
+    ${arrow(385, 72, 385, 110, "owner-set, via inbox")}
+    ${box(20, 110, 130, 60, "OWNER", "decisions + eyes", "var(--amber)")}
+    <rect x="20" y="250" width="190" height="72" rx="9" fill="var(--panel2)" stroke="var(--amber)"/>
+    <text x="115" y="270" text-anchor="middle" font-size="12" font-weight="600">TRACKER BOARD</text>
+    <text x="35" y="292" font-size="10" fill="var(--dim)" style="fill:var(--dim)">answers · decisions · questions</text>
+    <text x="35" y="308" font-size="10" fill="var(--dim)" style="fill:var(--dim)">every entry carries a read-receipt</text>
+    ${box(300, 110, 170, 60, "CONDUCTOR", "one seat at a time", "var(--amber)")}
+    <rect x="660" y="16" width="280" height="150" rx="9" fill="var(--panel2)" stroke="var(--line)"/>
+    <text x="800" y="36" text-anchor="middle" font-size="12" font-weight="600">LEDGERS (guard gates every write)</text>
+    <text x="680" y="60" font-size="11">STATE.md <tspan fill="#a89bb0">&#8592; every seat: live status</tspan></text>
+    <text x="680" y="82" font-size="11">DECISIONS.md <tspan fill="#a89bb0">&#8592; an owner ruling lands</tspan></text>
+    <text x="680" y="104" font-size="11">DEFECTS.md <tspan fill="#a89bb0">&#8592; a run/review finds a defect</tspan></text>
+    <text x="680" y="126" font-size="11">HANDOFFS.md <tspan fill="#a89bb0">&#8592; a seat ends mid-arc</tspan></text>
+    <text x="680" y="150" font-size="10" fill="var(--s-done)" style="fill:var(--s-done)">era-closed entries: one-line lesson; bodies off-repo</text>
+    ${box(420, 290, 190, 55, "IMPLEMENTER xN", "PARALLEL on disjoint scopes", "")}
+    ${box(390, 390, 250, 56, "SESSION AUDIT", "logged per dispatch; read only on demand", "")}
+    ${arrow(510, 345, 510, 390, "--log-session")}
+    ${box(660, 200, 280, 60, "REVIEWER (policy model)", "adversarial first-line review of output packets", "var(--s-review)")}
+    <text x="385" y="186" text-anchor="middle" font-size="9" fill="var(--dim)" style="fill:var(--dim)">failed reworks / false proofs &#8594; Conductor implements</text>
+    <rect x="660" y="290" width="280" height="66" rx="9" fill="var(--panel2)" stroke="var(--d-design)"/>
+    <text x="800" y="308" text-anchor="middle" font-size="12" font-weight="600">VISUAL_CHECKS.md</text>
+    <text x="675" y="328" font-size="10" fill="var(--dim)" style="fill:var(--dim)">how to see + what to look for (any project);</text>
+    <text x="675" y="344" font-size="10" fill="var(--dim)" style="fill:var(--dim)">taste calls queue for the owner's eye</text>
+    ${arrow(150, 133, 300, 133, "questions up / verdicts down")}
+    ${arrow(85, 170, 85, 250, "writes")}
+    ${arrow(210, 270, 330, 180, "serve.py --inbox at seat start (marks read)")}
+    ${arrow(470, 125, 660, 70, "ruling / defect / status")}
+    ${arrow(390, 170, 450, 290, "task packet (chat-only)")}
+    ${arrow(610, 310, 700, 262, "output packet")}
+    ${arrow(700, 228, 470, 155, "verdict + proofs (spot-checked) · PASS / rework (max 2)")}
+    ${arrow(800, 260, 800, 290, "any visual claim")}
+  </svg>`;
+}
+async function renderOrch() {
+  const dp = doc.dispatch || {};
+  const imp = dp.implementer || { model: "Opus 5", thinking: "max" };
+  const rvw = dp.reviewer || { model: "Fable 5", thinking: "extra" };
+  $("#dp-model").value = imp.model;
+  $("#dp-think").value = imp.thinking;
+  $("#dp-rmodel").value = rvw.model;
+  $("#dp-rthink").value = rvw.thinking;
+  $("#dp-current").textContent = `current: implementer ${imp.model} ${imp.thinking} · reviewer ${rvw.model} ${rvw.thinking} (set ${dp.when || ""})`;
+  $("#orch-chain").innerHTML = `<h2 style="margin-top:0">Orchestration chain</h2>` + chainSVG();
+  const tk = await api("/api/tokens"), tf = tk.files;
+  const COND = ["CLAUDE.md", "CONDUCTOR.md", "STATE.md", "HANDOFFS.md"];
+  const IMPL = ["CLAUDE.md", "IMPLEMENTER.md", "TASK_TEMPLATE.md"];
+  const onDemand = Object.keys(tf).filter(f => !COND.includes(f) && !IMPL.includes(f));
+  const heat = n => n > 40000 ? "var(--s-review)" : n > 20000 ? "var(--amber)" : "var(--s-done)";
+  const group = (title, names, sub) => {
+    const rows = names.filter(f => f in tf);
+    const total = rows.reduce((s, f) => s + tf[f], 0);
+    return `<div style="min-width:220px"><b>${title}</b>
+      <div style="font-size:20px;color:${heat(total)};margin:4px 0">${total.toLocaleString()} tok</div>
+      <div class="notes" style="margin-bottom:6px">${sub}</div>
+      <ul class="mini">${rows.map(f => `<li>${f}: ${tf[f].toLocaleString()}</li>`).join("")}</ul></div>`;
+  };
+  $("#orch-tokens").innerHTML = `<h2 style="margin-top:0">Context budget - token estimate (${tk.note})</h2>
+    <div style="display:flex;gap:28px;flex-wrap:wrap">
+      ${group("Conductor path", COND, "loaded every Conductor seat")}
+      ${group("Implementer path", IMPL, "loaded every implementer spawn")}
+      ${group("On demand", onDemand, "read only when a task needs them")}
+    </div>
+    <p class="rule" style="margin-bottom:0">Green &lt; 20k · amber &lt; 40k · red above. When a path runs hot: compact the ledgers (--compact), archive finished steps, move era-dead bodies off-repo.</p>`;
+  $("#orch-files").innerHTML = cfg.orch_files.map(f =>
+    `<button class="ghost ${f === curOrch ? "sel" : ""}" data-orch="${f}">${f}</button>`).join("") ||
+    `<span class="notes">no orchestration dir configured</span>`;
+  document.querySelectorAll("[data-orch]").forEach(b => b.addEventListener("click", async () => {
+    curOrch = b.dataset.orch;
+    const r = await api("/api/orch?name=" + encodeURIComponent(curOrch));
+    $("#orch-name").textContent = curOrch;
+    const ed = $("#orch-editor"); ed.value = r.content; ed.disabled = false;
+    $("#orch-save").disabled = false; $("#orch-out").style.display = "none";
+    renderOrch();
+    $("#orch-editor").value = r.content;
+  }));
+}
+$("#dp-save").addEventListener("click", () => {
+  doc.dispatch = {
+    implementer: { model: $("#dp-model").value, thinking: $("#dp-think").value },
+    reviewer: { model: $("#dp-rmodel").value, thinking: $("#dp-rthink").value },
+    when: today() };
+  logEvent("dispatch-policy", "dispatch",
+    `policy -> implementer ${doc.dispatch.implementer.model} ${doc.dispatch.implementer.thinking} · reviewer ${doc.dispatch.reviewer.model} ${doc.dispatch.reviewer.thinking}`);
+  save();
+});
+$("#orch-save").addEventListener("click", async () => {
+  if (!curOrch) return;
+  const r = await api("/api/orch", { name: curOrch, content: $("#orch-editor").value });
+  const out = $("#orch-out");
+  out.style.display = "block";
+  out.className = "guard " + (r.ok ? "ok" : "fail");
+  out.textContent = (r.ok ? "GUARD OK - saved\n" : "GUARD REJECTED - previous file restored\n") + r.output;
+});
+
+/* ---------- shell ---------- */
+function render() {
+  stats();
+  const tab = document.querySelector("nav button.on").dataset.tab;
+  if (tab === "board") renderBoard();
+  if (tab === "chart") renderChart();
+  if (tab === "deps") renderDeps();
+  if (tab === "questions") renderQuestions();
+  if (tab === "orch") renderOrch();
+}
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("on"));
+  document.querySelectorAll("main section").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  document.getElementById(b.dataset.tab).classList.add("on");
+  render();
+}));
+(function fillFilters() {
+  $("#f-domain").innerHTML += DOMAINS.map(d => `<option>${d}</option>`).join("");
+  $("#f-stage").innerHTML += STAGES.map(s => `<option>${s}</option>`).join("");
+})();
+load();
+</script>
+</body>
+</html>

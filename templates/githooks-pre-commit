@@ -1,0 +1,19 @@
+#!/bin/sh
+# Orchestration ledger guard (CLAUDE.md rule 6, CONDUCTOR.md section 9).
+#
+# Blocks the two failure modes that have actually happened in this repo:
+# a ledger corrupted by a global substitution (commit 07af703 wrote a
+# 380 MB STATE.md), and ledgers growing past the point anyone reads them.
+#
+# Only runs when the commit touches orchestration/, so ordinary firmware
+# commits pay nothing. Installed via: git config core.hooksPath .githooks
+
+if git diff --cached --name-only | grep -q '^orchestration/'; then
+    python3 tools/ledger-guard/check.py || {
+        echo
+        echo "pre-commit: orchestration ledger guard FAILED - commit refused."
+        echo "A corruption finding (LDG001-LDG007) means the file is damaged:"
+        echo "recover it from git, do NOT compact it. See CONDUCTOR.md section 9."
+        exit 1
+    }
+fi

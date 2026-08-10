@@ -1,0 +1,15 @@
+# Linux (systemd user unit): tracker at login.
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp autostart/kbuba-tracker.service ~/.config/systemd/user/
+#   edit ExecStart below to the absolute path of YOUR clone's tracker/serve.py
+#   systemctl --user enable --now kbuba-tracker
+[Unit]
+Description=kbuba project tracker (http://127.0.0.1:8611)
+
+[Service]
+ExecStart=/usr/bin/python3 %h/projects/kbuba/tracker/serve.py
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

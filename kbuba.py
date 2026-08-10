@@ -233,6 +233,15 @@ def update():
         print("tracker: running instance refused shutdown (older version?) - "
               "the restarted server will take the next free port")
     was_running = st != "absent"
+    if st == "stopped":
+        # the old process dies asynchronously and answers probes for a
+        # beat; a successor started too early sees the zombie, exits
+        # "already running", and then NOTHING is left running. Wait for
+        # the port to be genuinely dead before restarting.
+        for _ in range(20):
+            if not tracker_url()[1]:
+                break
+            time.sleep(0.5)
     uid = os.getuid() if hasattr(os, "getuid") else 0
     restarted = False
     if (sys.platform == "darwin" and (Path.home() / "Library" / "LaunchAgents"
@@ -250,12 +259,20 @@ def update():
         restarted = run("systemctl", "--user", "restart",
                         "kbuba-tracker").returncode == 0
     if restarted:
+        alive = False
         for _ in range(10):
             time.sleep(0.5)
             if tracker_url()[1]:
+                alive = True
                 break
-        print("tracker: restarted on the new code")
-        get_url()
+        if alive:
+            print("tracker: restarted on the new code")
+            get_url()
+        else:
+            # never claim a restart the poll did not witness
+            print("tracker: restart command succeeded but the server did "
+                  "NOT come up - start it manually: "
+                  f"{PY} \"{HERE / 'tracker' / 'serve.py'}\"")
     elif was_running:
         print("tracker: stopped (it was running the old code manually) - "
               f"start it again:  {PY} \"{HERE / 'tracker' / 'serve.py'}\"")
@@ -280,7 +297,9 @@ def uninstall(with_ponytail):
             print("autostart: was not installed")
         else:
             r = run("schtasks", "/Delete", "/F", "/TN", "kbuba-tracker",
-                    capture_output=True, text=True)
+                    capture_output=True, text=True,
+                    encoding="oem", errors="replace")  # console tools emit
+            # OEM (e.g. cp850 on French Windows), not the ANSI codepage
             if r.returncode == 0:
                 print("autostart: removed")
             else:
@@ -305,9 +324,12 @@ def uninstall(with_ponytail):
     if shim and str(HERE) in (os.path.realpath(shim) + Path(shim).read_text(errors="replace")):
         if os.name == "nt" and shim.lower().endswith(".cmd"):
             # cmd.exe errors (and exits 1) if its batch file vanishes
-            # mid-run, so delete it a beat later from a detached process
+            # mid-run, so delete it a beat later from a detached process.
+            # MUST be a single string with shell=True: list args get their
+            # inner quotes backslash-escaped, which cmd.exe misparses and
+            # the del target becomes garbage (verified by repro).
             subprocess.Popen(
-                ["cmd", "/c", f'ping -n 2 127.0.0.1 >nul & del /q "{shim}"'],
+                f'ping -n 2 127.0.0.1 >nul & del /q "{shim}"', shell=True,
                 creationflags=0x00000008 | 0x00000200)  # DETACHED | NEW_GROUP
             print(f"command: {shim} removes itself in a moment")
         else:

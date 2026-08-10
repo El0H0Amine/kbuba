@@ -167,8 +167,22 @@ is used when the owner prefers to run the conversation. For either route:
    findings (DECISIONS 44). Owner-mediated prompts parallelize only when
    the owner asks.
 2. Prepare the isolated `task/<TASK-ID>` branch and working copy before
-   dispatching. Record the exact absolute working-copy path and
-   baseline commit in the packet.
+   dispatching. The working copy is a git worktree at
+   `.worktrees/<TASK-ID>` under the repo root (gitignored; never a
+   sibling checkout): `git worktree add .worktrees/<TASK-ID> -b
+   task/<TASK-ID> <baseline>`. One worktree per task keeps parallel
+   subagents fully independent of each other and of main. Record the
+   exact absolute working-copy path and baseline commit in the packet.
+   **Merge cadence:** the Conductor merges each task to main as it is
+   accepted. When a feature deliberately spans several tasks that must
+   land together, its accepted branches wait and the Conductor merges
+   them as one integration at feature end - waiting is a stated plan,
+   never a default. **Retention:** a worktree whose branch is merged
+   and whose task is DONE is removed by the Conductor after 3 days
+   (`git worktree remove`, then delete the merged branch); under disk
+   pressure remove the oldest merged-DONE worktrees first. A worktree
+   carrying unmerged work is never deleted - it is the only copy of
+   that work.
 3. Fill a packet from `orchestration/TASK_TEMPLATE.md`. The packet is the
    implementer's ENTIRE context from you: it contains the objective,
    spec section references (pointers - the implementer reads the spec

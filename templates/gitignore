@@ -5,3 +5,5 @@ pixel-art-output/
 # tracker cold storage + session audit (context-cold; keep out of agent reads)
 tracker/data/*-cold.json
 tracker/data/*-sessions.json
+# per-task agent worktrees (CONDUCTOR.md s5.2)
+.worktrees/

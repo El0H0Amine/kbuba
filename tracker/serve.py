@@ -423,7 +423,9 @@ def selftest():
             (t / "d.json").write_text("{}")
             os.utime(t / "d.json", (when, when))
         ps = [p for p in discover({"roots": [td]}) if p["name"] == "P!"]
-        assert len(ps) == 1 and ps[0]["dir"].endswith("repoA/tracker"), ps
+        # compare path components, not a slash-styled suffix: discover()
+        # returns native separators (backslashes on Windows)
+        assert len(ps) == 1 and Path(ps[0]["dir"]).parts[-2:] == ("repoA", "tracker"), ps
     print("selftest OK")
 
 

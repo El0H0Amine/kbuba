@@ -31,6 +31,12 @@ git clone https://github.com/El0H0Amine/kbuba ~/projects/kbuba
 bash ~/projects/kbuba/install.sh
 ```
 
+`install.sh` ends by deciding tracker launch-at-login. Run
+non-interactively it prints the question for you to relay: **ask the
+user**, then run `kbuba autostart` on yes, or tell them to keep
+`python3 tracker/serve.py` running in a terminal on no. Same question
+applies on Windows after creating the shim.
+
 **Windows:** clone the repo, then create `kbuba.cmd` in a directory on
 `PATH` (e.g. `%LOCALAPPDATA%\Microsoft\WindowsApps`) containing:
 
@@ -57,15 +63,19 @@ mkdir my-project & cd my-project
 kbuba setup-folder "My Project"
 ```
 
-`setup-folder` ends by asking **"Launch the tracker at login?"** -
-answer yes and the tracker becomes a background process that is always
-on (LaunchAgent on macOS, systemd user unit on Linux, Task Scheduler
-logon task on Windows; also installable later with `kbuba autostart`).
-If you decline, you must run the tracker yourself in a **separate
-terminal and keep it open** while you work:
-`python3 tracker/serve.py` (macOS/Linux) / `python tracker\serve.py`
-(Windows). In non-interactive runs the question is answered with
-`--autostart` / `--no-autostart`.
+The tracker is **global** - one always-on server carries every project,
+so launch-at-login is decided once at *install* time (`install.sh` asks;
+`kbuba autostart` installs it anytime: LaunchAgent on macOS, systemd
+user unit on Linux, Task Scheduler logon task on Windows). If you
+declined, run `python3 tracker/serve.py` in a **separate terminal and
+keep it open** while you work (`python` on Windows).
+
+`setup-folder` registers the new project with the global tracker
+wherever the folder was created (its parent directory joins the
+discovery roots) and switches the live board to it - so opening the
+tracker right after shows THIS project, and the header dropdown now
+lists all of them. For a project scaffolded before this existed, run
+`kbuba register` inside its folder to put it on the board.
 
 Then start a Conductor: open an AI conversation in the folder whose
 first message contains `ROLE=CONDUCTOR` plus your product intent. Every

@@ -2,8 +2,11 @@
 """kbuba - scaffold an AI Conductor/Implementer orchestration system +
 tracker board into the current directory. Cross-platform, stdlib only.
 
-    kbuba setup-folder ["Project Name"] [--no-ponytail] [--autostart|--no-autostart]
-                                          scaffold into the CURRENT dir
+    kbuba setup-folder ["Project Name"] [--no-ponytail]
+                                          scaffold into the CURRENT dir and put
+                                          it on the global tracker board
+    kbuba register                        put an EXISTING project on the board
+                                          (run inside its folder)
     kbuba get-url                         print the live tracker URL (bookmark it)
     kbuba autostart                       launch the tracker at login (mac/linux/win)
     kbuba update                          git pull this clone + restart the tracker
@@ -12,13 +15,13 @@ tracker board into the current directory. Cross-platform, stdlib only.
     kbuba ui                              open the tracker board
     kbuba help
 
-setup-folder also installs the ponytail plugin (minimal-code discipline,
-github.com/dietrichgebert/ponytail) with ultra as first-time default and
-tells you exactly what it did; skip with --no-ponytail. It then asks
-whether the tracker should launch at login (the flags answer it
-non-interactively); declining means running the tracker manually in a
-separate terminal. If the default port is taken by another process the
-server moves to the next free one - `kbuba get-url` always finds it.
+The tracker is GLOBAL: one always-on server carries every project, and
+launch-at-login is decided once at INSTALL time (install.sh asks; or run
+`kbuba autostart` anytime). setup-folder installs the ponytail plugin
+(minimal-code discipline, github.com/dietrichgebert/ponytail; skip with
+--no-ponytail), registers the new project with the tracker wherever it
+was created, and switches the live board to it. If the default port is
+taken the server moves to the next free one - `kbuba get-url` finds it.
 
 setup-folder creates: CLAUDE.md/AGENTS.md agent entry points,
 orchestration/ (Conductor+Implementer protocol, seed ledgers), tracker/
@@ -196,8 +199,40 @@ WantedBy=default.target
     return ok
 
 
-MANUAL_MSG = (f"tracker will NOT auto-start: run  {PY} tracker/serve.py  "
-              "in a separate terminal and KEEP IT OPEN while you work")
+def register_project(tdir):
+    """The tracker is GLOBAL (one server, every project). Make a new
+    project visible and front-most: its parent dir joins the registry
+    roots (so discovery finds it wherever it was created), it becomes
+    last-open, and a live server is switched to it right now."""
+    import urllib.request
+    tdir = Path(tdir).resolve()
+    state = Path.home() / ".local" / "state" / "kbuba-tracker"
+    reg_p = state / "registry.json"
+    try:
+        reg = json.loads(reg_p.read_text())
+    except (OSError, ValueError):
+        reg = {}
+    reg.setdefault("roots", ["~/projects"])
+    parent = str(tdir.parent.parent)
+    if parent not in [str(Path(r).expanduser()) for r in reg["roots"]]:
+        reg["roots"].append(parent)
+    reg["last"] = str(tdir)
+    state.mkdir(parents=True, exist_ok=True)
+    reg_p.write_text(json.dumps(reg, indent=1))
+    url, alive = tracker_url()
+    if alive:
+        try:
+            urllib.request.urlopen(urllib.request.Request(
+                url + "/api/project",
+                data=json.dumps({"dir": str(tdir)}).encode()), timeout=3)
+            print(f"tracker: board switched to this project - open {url} "
+                  "(the header dropdown switches between projects)")
+        except Exception as e:
+            print(f"tracker: running at {url} but could not switch to this "
+                  f"project ({e}) - reload the page and use the dropdown")
+    else:
+        print("tracker: NOT running. Install always-on: kbuba autostart; "
+              f"or run  {PY} tracker/serve.py  in a kept-open terminal")
 
 
 def stop_tracker():
@@ -367,25 +402,16 @@ def main():
             print("ponytail: skipped (--no-ponytail)")
         else:
             install_ponytail()
-        # tracker always-on question (flags win; TTY asks; non-TTY - an AI
-        # driving this - gets both options to relay to its user)
+        # launch-at-login is decided once, at kbuba INSTALL time (the
+        # tracker is global) - here we only honor an explicit flag
         if "--autostart" in flags:
             autostart_install()
-        elif "--no-autostart" in flags:
-            print(MANUAL_MSG)
-        elif sys.stdin.isatty():
-            if input("Launch the tracker at login? [Y/n] ").strip().lower() not in ("n", "no"):
-                autostart_install()
-            else:
-                print(MANUAL_MSG)
-        else:
-            print("tracker autostart: NOT configured (non-interactive run). "
-                  "ASK THE USER, then either run `kbuba autostart` or tell "
-                  f"them: {MANUAL_MSG}")
-        print()
-        get_url()
-        print("AI agents: tell your user this URL and to BOOKMARK it; "
-              "`kbuba get-url` recovers it anytime.")
+        register_project(Path.cwd() / "tracker")
+        print("AI agents: tell your user the tracker URL above and to "
+              "BOOKMARK it; `kbuba get-url` recovers it anytime.")
+    elif cmd == "register":
+        # retrofit an existing project (run inside its folder)
+        register_project(Path.cwd() / "tracker")
     elif cmd == "get-url":
         get_url()
     elif cmd == "autostart":

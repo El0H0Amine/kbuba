@@ -333,6 +333,7 @@ def update():
     copies in every project, then restart the tracker so it serves the
     new code. Guidelines and ledgers in projects are never touched."""
     import time
+    print(f"updating the kbuba install at {HERE} (works from any directory)")
     r = run("git", "-C", str(HERE), "pull", "--ff-only",
             capture_output=True, text=True)
     out = (r.stdout + r.stderr).strip()

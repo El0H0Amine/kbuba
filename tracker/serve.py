@@ -291,6 +291,13 @@ class Handler(BaseHTTPRequestHandler):
             reg["last"] = str(CUR.root)
             save_registry(reg)
             self._json({"ok": True, "project": CUR.cfg["project"]})
+        elif self.path == "/api/shutdown":
+            # Server binds 127.0.0.1 only. Lets `kbuba uninstall` (and any
+            # local caller) stop a running instance cross-platform,
+            # including manually started ones.
+            self._json({"ok": True})
+            import threading
+            threading.Thread(target=self.server.shutdown).start()
         elif self.path == "/api/orch":
             name = body.get("name", "")
             if name not in orch_files(CUR):
@@ -494,3 +501,10 @@ if __name__ == "__main__":
     print(f"tracker: {url}  project={CUR.cfg['project']}  "
           f"data={CUR.data.name}  orch={CUR.orch}")
     srv.serve_forever()
+    # reached via /api/shutdown: drop the url record if it is still ours
+    try:
+        if (STATE_HOME / "url").read_text().strip() == url:
+            (STATE_HOME / "url").unlink()
+    except OSError:
+        pass
+    print("tracker: stopped")

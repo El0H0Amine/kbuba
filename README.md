@@ -152,7 +152,8 @@ apply them anyway.
 ## Uninstall
 
 ```sh
-kbuba uninstall                 # removes autostart + PATH shim + tracker state
+kbuba uninstall                 # stops the running tracker, removes autostart
+                                # + PATH shim + tracker state
 kbuba uninstall --with-ponytail # also uninstalls the ponytail plugin
 ```
 

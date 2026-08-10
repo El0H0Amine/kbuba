@@ -195,11 +195,26 @@ MANUAL_MSG = (f"tracker will NOT auto-start: run  {PY} tracker/serve.py  "
               "in a separate terminal and KEEP IT OPEN while you work")
 
 
+def stop_tracker():
+    """Stop a running tracker (autostarted OR manual) via its local-only
+    shutdown endpoint; the /api/config probe first confirms the port
+    really holds a tracker."""
+    import urllib.request
+    url, alive = tracker_url()
+    if not alive:
+        return False
+    try:
+        urllib.request.urlopen(url + "/api/shutdown", data=b"{}", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
 def uninstall(with_ponytail):
-    """Remove everything kbuba put on this machine: the autostart
-    service, the PATH shim, the tracker state dir, and (only with
-    --with-ponytail) the ponytail plugin. Scaffolded projects and this
-    clone are never deleted."""
+    """Remove everything kbuba put on this machine: the running tracker,
+    the autostart service, the PATH shim, the tracker state dir, and
+    (only with --with-ponytail) the ponytail plugin. Scaffolded projects
+    and this clone are never deleted."""
     if sys.platform == "darwin":
         run("launchctl", "bootout",
             f"gui/{os.getuid()}/com.projectkbuba.tracker", capture_output=True)
@@ -216,6 +231,8 @@ def uninstall(with_ponytail):
         unit = Path.home() / ".config" / "systemd" / "user" / "kbuba-tracker.service"
         removed = unit.exists() and (unit.unlink() or True)
         print(f"autostart: {'removed' if removed else 'was not installed'}")
+
+    print("tracker: stopped" if stop_tracker() else "tracker: was not running")
 
     shim = shutil.which("kbuba") or shutil.which("kbuba.cmd")
     if shim and str(HERE) in (os.path.realpath(shim) + Path(shim).read_text(errors="replace")):

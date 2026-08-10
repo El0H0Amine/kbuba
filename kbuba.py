@@ -7,6 +7,7 @@ tracker board into the current directory. Cross-platform, stdlib only.
                                           it on the global tracker board
     kbuba register                        put an EXISTING project on the board
                                           (run inside its folder)
+    kbuba doctor                          verify the whole chain, print exact fixes
     kbuba get-url                         print the live tracker URL (bookmark it)
     kbuba autostart                       launch the tracker at login (mac/linux/win)
     kbuba update                          git pull this clone + restart the tracker
@@ -235,6 +236,56 @@ def register_project(tdir):
               f"or run  {PY} tracker/serve.py  in a kept-open terminal")
 
 
+def doctor():
+    """Verify the whole chain - python, git, project scaffold, guard,
+    global tracker, board registration - printing an exact fix for every
+    failure. Agents run this whenever an orchestration command fails."""
+    problems = []
+
+    def check(label, good, fix=""):
+        print(("  OK  " if good else " FAIL ") + label)
+        if not good:
+            print(f"       fix: {fix}")
+            problems.append(label)
+
+    check(f"python: {sys.executable}", True)
+    check("git on PATH", bool(shutil.which("git")), "install git")
+    cwd = Path.cwd()
+    proj = (cwd / "tracker" / "config.json").exists()
+    if proj:
+        guard = cwd / "tools" / "ledger-guard" / "check.py"
+        check("scaffold: tools/ledger-guard/check.py", guard.exists(),
+              "copy tools/ledger-guard from the kbuba clone into this project")
+        if guard.exists():
+            r = run(sys.executable, str(guard), capture_output=True, text=True, cwd=cwd)
+            check("ledger guard runs green", r.returncode == 0,
+                  (r.stdout + r.stderr).strip()[-200:] or "see guard output")
+        r = run(sys.executable, str(cwd / "tracker" / "serve.py"), "--selftest",
+                capture_output=True, text=True, cwd=cwd)
+        check("tracker CLI runs (--selftest)", r.returncode == 0,
+              (r.stdout + r.stderr).strip()[-200:] or "see selftest output")
+    else:
+        print("  --   no tracker/config.json here: not a scaffolded project "
+              "(kbuba setup-folder creates one); project checks skipped")
+    url, alive = tracker_url()
+    check(f"global tracker reachable ({url})", alive,
+          "kbuba autostart   (or keep `" + PY + " <clone>/tracker/serve.py` "
+          "running in a terminal)")
+    if alive and proj:
+        import urllib.request
+        try:
+            cfg = json.load(urllib.request.urlopen(url + "/api/config", timeout=2))
+            dirs = {p["dir"] for p in cfg.get("projects", [])}
+            check("this project is on the board",
+                  str((cwd / "tracker").resolve()) in dirs,
+                  "kbuba register   (run inside this folder)")
+        except Exception as e:
+            check("board project list readable", False, f"probe failed: {e}")
+    print("doctor: all clear" if not problems
+          else f"doctor: {len(problems)} problem(s) - apply the fixes above, re-run")
+    sys.exit(1 if problems else 0)
+
+
 def stop_tracker():
     """'stopped' | 'failed' (running, but shutdown refused - e.g. a server
     from before the endpoint existed) | 'absent'. Never conflate failed
@@ -411,7 +462,12 @@ def main():
               "BOOKMARK it; `kbuba get-url` recovers it anytime.")
     elif cmd == "register":
         # retrofit an existing project (run inside its folder)
+        if not (Path.cwd() / "tracker" / "config.json").exists():
+            sys.exit("no tracker/config.json here - this folder is not "
+                     "scaffolded; run: kbuba setup-folder")
         register_project(Path.cwd() / "tracker")
+    elif cmd == "doctor":
+        doctor()
     elif cmd == "get-url":
         get_url()
     elif cmd == "autostart":

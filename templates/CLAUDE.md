@@ -41,7 +41,16 @@ way the packet is the implementer's entire brief.
    unless you are the Conductor (and even the Conductor edits only
    `orchestration/STATE.md` routinely).
 3. Never weaken, skip, or modify acceptance tests to make work pass.
-4. **Never commit an `orchestration/` file without running the ledger
+4. **Board-first (owner order 2026-08-10):** work is PLANNED on the
+   tracker before it is executed. The Conductor records every task on
+   the board (item, stage, dependencies/schedule) BEFORE production
+   edits begin, and moves stages as reality moves - the board is the
+   owner's window and is never back-filled after the work. Board data
+   lives in `tracker/data/board.json` (bump `rev` on edits; the running
+   server shows changes on reload). If any orchestration or tracker
+   command fails, run `kbuba doctor` and apply its printed fixes -
+   never skip the board or the guard because a command errored.
+5. **Never commit an `orchestration/` file without running the ledger
    guard first** - `python3 tools/ledger-guard/check.py`, exit 0 required.
    Never use a global substitution, `replace_all`, or `sed -i` on these
    ledgers; a corruption finding is repaired by recovering the last good
@@ -62,9 +71,11 @@ plugin, read the ponytail repo's guidelines and apply them anyway.
 ## Quick reference
 
 ```sh
-# tracker board (owner UI + agent inbox)
+# tracker board (owner UI + agent inbox); on Windows use `python`
 python3 tracker/serve.py            # http://127.0.0.1:8611
 python3 tracker/serve.py --inbox    # every seat, at startup
 # ledger guard (before ANY orchestration/ commit)
 python3 tools/ledger-guard/check.py
+# any of the above failing?
+kbuba doctor                        # prints the exact fix for each break
 ```

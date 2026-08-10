@@ -122,7 +122,9 @@ choices; the Conductor writes exact requirements and acceptance boundaries.
 When measurements are required before a constant can be frozen, the Conductor
 writes a bounded evidence task, then incorporates the reviewed results into the
 specification. Production implementation starts only after its governing
-requirements are closed.
+requirements are closed AND its item exists on the tracker board with
+stage, dependencies, and schedule - plan first, execute second; the
+board is the owner's window and is never back-filled after the work.
 
 Before preparing an implementer prompt, choose the lower-cost safe route for
 the task. This is a deliberate token-and-latency decision, not a preference

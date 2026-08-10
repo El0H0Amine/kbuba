@@ -134,6 +134,10 @@ apply them anyway.
 
 ## Tracker notes
 
+- A bare clone runs as-is: on first start the tracker bootstraps its
+  own gitignored `tracker/config.json` + empty board, so `serve.py` and
+  `kbuba autostart` work before any project exists (the clone shows up
+  in the switcher as a home board).
 - Multi-project: any repo under a registry root
   (`~/.local/state/kbuba-tracker/registry.json`, default `~/projects`)
   with a `tracker/config.json` appears in the switcher automatically;

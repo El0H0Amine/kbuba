@@ -42,6 +42,20 @@ class Proj:
             "sessions", self.cfg["data"].replace(".json", "-sessions.json"))).resolve()
 
 
+# A bare tracker copy (fresh clone of the tool repo, or a hand-copied
+# tracker/ dir) bootstraps itself so serve.py and the CLI always run:
+# missing config gets a minimal one, missing data an empty board.
+if not (ROOT / "config.json").exists():
+    (ROOT / "config.json").write_text(json.dumps(
+        {"project": ROOT.parent.name, "data": "data/board.json",
+         "orchestration_dir": "../orchestration", "guard": "true"}, indent=1))
+_data = ROOT / json.loads((ROOT / "config.json").read_text())["data"]
+if not _data.exists():
+    _data.parent.mkdir(parents=True, exist_ok=True)
+    _data.write_text(json.dumps(
+        {"rev": 1, "project": ROOT.parent.name, "items": [],
+         "inbox": [], "archive": []}, indent=1))
+
 LOCAL = Proj(ROOT)
 CFG, DATA, ORCH, COLD, SESS = LOCAL.cfg, LOCAL.data, LOCAL.orch, LOCAL.cold, LOCAL.sess
 CUR = LOCAL  # project the HTTP server currently displays

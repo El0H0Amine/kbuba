@@ -1,2 +1,4 @@
 __pycache__/
 .DS_Store
+/tracker/config.json
+/tracker/data/

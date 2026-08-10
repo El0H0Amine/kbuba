@@ -233,7 +233,20 @@ async function load() {
   }
   index(); render();
 }
-function index() { byId = {}; for (const it of doc.items) byId[it.id] = it; }
+function index() {
+  byId = {};
+  for (const it of doc.items) {
+    byId[it.id] = it;
+    // agents hand-author ownerCheck JSON and drift from the schema:
+    // bare-string checklist items rendered "undefined" (2026-08-10)
+    const oc = it.ownerCheck;
+    if (oc) {
+      if (Array.isArray(oc.commands)) oc.commands = oc.commands.join("\n");
+      oc.checklist = (oc.checklist || []).map(c =>
+        typeof c === "string" ? { text: c, done: false } : c);
+    }
+  }
+}
 async function save() {
   try {
     const r = await api("/api/tracker", doc);

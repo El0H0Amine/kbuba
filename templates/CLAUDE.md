@@ -7,10 +7,9 @@
 
 # {{PROJECT}} (auto-read entry point for Claude agents)
 
-**Project:** <one short paragraph of product intent - keep this file
-small, it is loaded into every agent context>. Until a normative spec
-exists, a task packet carries its full requirements inline and cites no
-spec.
+**Project:** <one short paragraph of product intent - this file loads
+into every agent context>. Until a normative spec exists, a task
+packet carries its full requirements inline and cites no spec.
 
 ## Role selection - read this first
 
@@ -25,12 +24,11 @@ Two roles exist. Determine yours before doing anything:
   obey `orchestration/IMPLEMENTER.md`. If you have no TASK packet
   (format in `orchestration/TASK_TEMPLATE.md`), stop and ask for one.
 
-Never assume the Conductor role. There is exactly one Conductor
-conversation at a time, and it is started deliberately by the project
-owner with the token. Implementer conversations are started either by
-the Conductor spawning an agent with its exact TASK packet (the default)
-or by the owner pasting that packet into a fresh conversation; either
-way the packet is the implementer's entire brief.
+Never assume the Conductor role: exactly one Conductor conversation
+exists at a time, started deliberately by the owner with the token. Implementer conversations start either by the
+Conductor spawning an agent with its exact TASK packet (the default)
+or by the owner pasting it into a fresh conversation; either way the
+packet is the implementer's entire brief.
 
 ## Rules for every agent, both roles
 
@@ -42,28 +40,28 @@ way the packet is the implementer's entire brief.
    `orchestration/STATE.md` routinely).
 3. Never weaken, skip, or modify acceptance tests to make work pass.
 4. **Board-first (owner order 2026-08-10):** work is PLANNED on the
-   tracker before it is executed. The Conductor records every task on
-   the board (item, stage, dependencies/schedule) BEFORE production
-   edits begin, and moves stages as reality moves - the board is the
-   owner's window and is never back-filled after the work. Board data
+   tracker before it is executed. The Conductor records every task
+   (item, stage, dependencies/schedule) BEFORE production edits, and
+   moves stages as reality moves - the board is the owner's window,
+   never back-filled after the work. Board data
    lives in `tracker/data/board.json` (bump `rev` on edits; the running
    server shows changes on reload). If any orchestration or tracker
-   command fails, run `kbuba doctor` and apply its printed fixes -
-   never skip the board or the guard because a command errored.
+   command fails, run `kbuba doctor` and apply its fixes - never
+   skip the board or the guard because a command errored.
 5. **Never commit an `orchestration/` file without running the ledger
    guard first** - `python3 tools/ledger-guard/check.py`, exit 0 required.
    Never use a global substitution, `replace_all`, or `sed -i` on these
    ledgers; a corruption finding is repaired by recovering the last good
-   copy from git, never by compacting. Full rules and size caps in
+   copy from git, never by compacting. Full rules and token caps in
    `orchestration/CONDUCTOR.md` §9.
 
 ## Code discipline: ponytail (project default ULTRA)
 
-The ponytail plugin (github.com/dietrichgebert/ponytail) was installed
-by this scaffold and its guidelines BIND every coding task here:
+The ponytail plugin (github.com/dietrichgebert/ponytail) ships with
+this scaffold and its guidelines BIND every coding task:
 question whether the code needs to exist at all, reuse this codebase
-first, prefer the stdlib and native platform features over
-dependencies, one line before fifty - the minimum that works. Change
+first, prefer stdlib and native features over dependencies,
+one line before fifty - the minimum that works. Change
 intensity with `/ponytail lite|full|ultra|off` (default lives in
 `~/.config/ponytail/config.json`). If your agent platform lacks the
 plugin, read the ponytail repo's guidelines and apply them anyway.

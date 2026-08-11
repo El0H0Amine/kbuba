@@ -23,8 +23,15 @@ Findings (each is one line: FILE CODE detail):
   LDG005_CONSECUTIVE_RUN  identical lines repeat back to back
   LDG006_EXPLOSIVE_GROWTH file multiplied in size against its committed version
   LDG007_NO_HEADING       file does not open with a level-1 markdown heading
-  LDG008_OVER_LINE_CAP    file is over its line cap; run --compact
+  LDG008_OVER_CAP         file is over its TOKEN cap; --compact (ledgers with
+                          entry structure) or shorten by hand (docs/state)
   LDG009_PINNED_OVER_CAP  entries that may never be archived exceed the cap
+
+Caps are TOKEN budgets, estimated
+as ceil(chars / 4) - the standard English-prose approximation. Governed
+files now include the guideline docs (CONDUCTOR, IMPLEMENTER,
+TASK_TEMPLATE, VISUAL_CHECKS, repo-root CLAUDE.md): they have no entry
+rotation, so exceeding their cap means a deliberate hand-compression.
 
 LDG001-LDG007 are corruption: never commit, never "fix" by compacting.
 LDG008 is routine and is what --compact resolves. LDG009 needs a human.
@@ -62,7 +69,18 @@ GROWTH_FACTOR = 3.0
 GROWTH_MIN_DELTA = 100 * 1024
 
 PIN_MARKER = re.compile(r"<!--\s*pinned\s*-->", re.IGNORECASE)
-POINTER_COST = 14  # lines the archive pointer block adds back to a live file
+POINTER_COST = 250  # tokens the archive pointer block adds back to a live file
+
+
+def est_tokens(text: str) -> int:
+    """ceil(chars/4): the standard prose approximation; deterministic and
+    dependency-free. Caps below are calibrated against it, not a real
+    tokenizer - consistency matters more than absolute accuracy here."""
+    return (len(text) + 3) // 4
+
+
+def group_tokens(group) -> int:
+    return est_tokens("\n".join("\n".join(e) for e in group))
 
 # A defect is archivable only when it is confidently finished. Anything
 # ambiguous stays in the live file: losing sight of an open defect is a far
@@ -79,30 +97,35 @@ NOT_CLOSED_WORDS = re.compile(
 class Ledger:
     """One governed file: how to split it, what may never be archived."""
 
-    def __init__(self, name, line_cap, entry_re, kind, hard_cap=True):
+    def __init__(self, name, cap, entry_re, kind, rel=None):
         self.name = name
-        self.line_cap = line_cap
+        self.cap = cap  # tokens (est_tokens)
         self.entry_re = re.compile(entry_re) if entry_re else None
         self.kind = kind
-        self.hard_cap = hard_cap
+        self.rel = rel or f"orchestration/{name}"
 
 
 LEDGERS = [
-    # STATE.md is live state, rewritten rather than appended, so it has no
-    # compactable entry structure. Its cap is advisory (owner scope, 2026-07-30
-    # covered corruption only) but it is reported, because a 1,700-line "live
-    # and compact" file is the drift that precedes the next incident.
-    Ledger("STATE.md", 600, None, "state", hard_cap=False),
+    # STATE.md is live state, rewritten rather than appended - no entry
+    # rotation; over cap = rewrite it (it is not append-only).
+    Ledger("STATE.md", 3500, None, "state"),
     # 'File contract' is deliberately excluded so it stays in the preamble and
     # is never a rotation candidate: it is the rule set, not a handoff.
-    Ledger("HANDOFFS.md", 200, r"^## (Handoff #\d+|#\d+\b)", "handoffs"),
+    Ledger("HANDOFFS.md", 1000, r"^## (Handoff #\d+|#\d+\b)", "handoffs"),
     Ledger(
         "DECISIONS.md",
-        500,
+        5000,
         r"^## (\d{4}-\d{2}-\d{2}|Deferred and accepted|V1 product and architecture)",
         "decisions",
     ),
-    Ledger("DEFECTS.md", 500, r"^## .{0,40}?\bD-\d+", "defects"),
+    Ledger("DEFECTS.md", 2000, r"^## .{0,40}?\bD-\d+", "defects"),
+    # Guideline docs: no rotation structure; over cap = hand-compress,
+    # preserving every rule (they are read every seat - that IS the budget).
+    Ledger("CONDUCTOR.md", 5000, None, "doc"),
+    Ledger("IMPLEMENTER.md", 1000, None, "doc"),
+    Ledger("TASK_TEMPLATE.md", 1000, None, "doc"),
+    Ledger("VISUAL_CHECKS.md", 1000, None, "doc"),
+    Ledger("CLAUDE.md", 1000, None, "doc", rel="CLAUDE.md"),
 ]
 
 
@@ -254,7 +277,7 @@ def pointer_block(ledger, archived_groups, archive_rel):
         "",
         f"{sum(len(g) for g in archived_groups)} earlier entries were rotated "
         f"into [`{archive_rel}`]({archive_rel}) to hold this file under its "
-        f"{ledger.line_cap}-line cap.",
+        f"{ledger.cap}-token cap.",
         "Nothing was deleted: the archive is committed, and git history holds "
         "every prior revision. Grep the archive before assuming a decision or "
         "defect is unrecorded.",
@@ -285,10 +308,12 @@ def compress_ids(ids):
 
 
 def compact(path, ledger, root, dry_run):
-    """Rotate oldest non-pinned entries out until the cap is met."""
-    lines = path.read_text(encoding="utf-8").split("\n")
-    if len(lines) <= ledger.line_cap or ledger.entry_re is None:
+    """Rotate oldest non-pinned entries out until the token cap is met."""
+    text = path.read_text(encoding="utf-8")
+    total = est_tokens(text)
+    if total <= ledger.cap or ledger.entry_re is None:
         return None
+    lines = text.split("\n")
     preamble, entries = split_entries(lines, ledger)
     if not entries:
         return f"{ledger.name}: no entry structure to compact; shorten by hand"
@@ -298,19 +323,19 @@ def compact(path, ledger, root, dry_run):
     # Drop any pointer block from a previous run; it is rebuilt below.
     keep_pre = strip_pointer_block(preamble)
 
-    # The pointer block itself costs lines, so aim under the cap by its size.
-    target = ledger.line_cap - POINTER_COST
+    # The pointer block itself costs tokens, so aim under the cap by its size.
+    target = ledger.cap - POINTER_COST
     archived, kept = [], []
-    budget = len(keep_pre) + sum(len(e) for g in groups for e in g)
+    budget = est_tokens("\n".join(keep_pre)) + sum(group_tokens(g) for g in groups)
     for group, pinned in zip(groups, pins):
-        size = sum(len(e) for e in group)
+        size = group_tokens(group)
         if pinned or budget <= target:
             kept.append(group)
         else:
             archived.append(group)
             budget -= size
     if not archived:
-        return (f"{ledger.name}: over cap at {len(lines)} lines but every entry "
+        return (f"{ledger.name}: over cap at {total} tokens but every entry "
                 f"is pinned (LDG009)")
 
     archive_dir = root / "orchestration" / "archive"
@@ -321,12 +346,13 @@ def compact(path, ledger, root, dry_run):
     live = keep_pre + pointer_block(ledger, archived, archive_rel) + new_entries
     moved_text = "\n".join(l for g in archived for e in g for l in e)
 
+    live_tokens = est_tokens("\n".join(live))
     if dry_run:
-        return (f"{ledger.name}: {len(lines)} -> {len(live)} lines, "
+        return (f"{ledger.name}: {total} -> {live_tokens} tokens, "
                 f"{sum(len(g) for g in archived)} entries "
                 f"({len(moved_text.splitlines())} lines) to {archive_rel}"
-                + ("" if len(live) <= ledger.line_cap else
-                   f"  [STILL OVER CAP by {len(live) - ledger.line_cap}]"))
+                + ("" if live_tokens <= ledger.cap else
+                   f"  [STILL OVER CAP by {live_tokens - ledger.cap}]"))
 
     archive_dir.mkdir(parents=True, exist_ok=True)
     if archive_path.exists():
@@ -350,22 +376,22 @@ def compact(path, ledger, root, dry_run):
                 f"live file left untouched: {line[:70]!r}")
 
     path.write_text("\n".join(live), encoding="utf-8")
-    return (f"{ledger.name}: {len(lines)} -> {len(live)} lines; "
+    return (f"{ledger.name}: {total} -> {live_tokens} tokens; "
             f"{sum(len(g) for g in archived)} entries archived to {archive_rel}")
 
 
 def pinned_floor(path, ledger):
-    """(lines that may never be archived, whether any rotatable entry remains)."""
+    """(tokens that may never be archived, whether any rotatable entry remains)."""
     if ledger.entry_re is None:
         return 0, False
     lines = path.read_text(encoding="utf-8").split("\n")
     preamble, entries = split_entries(lines, ledger)
     groups = group_entries(entries, ledger)
-    floor = len(strip_pointer_block(preamble))
+    floor = est_tokens("\n".join(strip_pointer_block(preamble)))
     rotatable = False
     for g in groups:
         if is_pinned(g, ledger)[0]:
-            floor += sum(len(e) for e in g)
+            floor += group_tokens(g)
         else:
             rotatable = True
     return floor, rotatable
@@ -383,7 +409,7 @@ def main():
 
     findings, notes = [], []
     for ledger in LEDGERS:
-        path = root / "orchestration" / ledger.name
+        path = root / ledger.rel
         if not path.exists():
             findings.append((ledger.name, "LDG001_EMPTY", "file is missing"))
             continue
@@ -401,15 +427,17 @@ def main():
                 notes.append(note)
             text = path.read_text(encoding="utf-8")
 
-        n = len(text.split("\n"))
-        if n > ledger.line_cap:
+        n = est_tokens(text)
+        if n > ledger.cap:
             floor, rotatable = pinned_floor(path, ledger)
-            if not ledger.hard_cap:
-                notes.append(f"WARN {ledger.name} LDG008_OVER_LINE_CAP: {n} lines "
-                             f"over the {ledger.line_cap}-line cap (advisory)")
+            if ledger.entry_re is None:
+                findings.append((ledger.name, "LDG008_OVER_CAP",
+                                 f"{n} tokens over the {ledger.cap}-token cap; "
+                                 f"no rotation for this file - compress it by "
+                                 f"hand (rules/live state must survive intact)"))
             elif rotatable:
-                findings.append((ledger.name, "LDG008_OVER_LINE_CAP",
-                                 f"{n} lines over the {ledger.line_cap}-line cap "
+                findings.append((ledger.name, "LDG008_OVER_CAP",
+                                 f"{n} tokens over the {ledger.cap}-token cap "
                                  f"with rotatable entries left; run "
                                  f"tools/ledger-guard/check.py --compact"))
             else:
@@ -418,8 +446,8 @@ def main():
                 # it would hide live work to satisfy a number. Report, do not
                 # block, and do not let the number quietly disappear.
                 notes.append(
-                    f"WARN {ledger.name} LDG009_PINNED_OVER_CAP: {n} lines vs a "
-                    f"{ledger.line_cap}-line cap; all {floor} remaining lines are "
+                    f"WARN {ledger.name} LDG009_PINNED_OVER_CAP: {n} tokens vs a "
+                    f"{ledger.cap}-token cap; all {floor} remaining tokens are "
                     f"pinned (open/unconsumed). Fully rotated. Shrinks as entries "
                     f"close, or needs a deliberate evidence-compression pass.")
 

@@ -8,7 +8,7 @@
 # Only runs when the commit touches orchestration/, so ordinary firmware
 # commits pay nothing. Installed via: git config core.hooksPath .githooks
 
-if git diff --cached --name-only | grep -q '^orchestration/'; then
+if git diff --cached --name-only | grep -q '^orchestration/\|^CLAUDE\.md$'; then
     PY=$(command -v python3 || command -v python)
     "$PY" tools/ledger-guard/check.py || {
         echo

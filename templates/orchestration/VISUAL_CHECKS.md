@@ -28,6 +28,17 @@ Status legend for owner queues: [ ] awaiting owner, [x] approved, [!] veto.
 6. **Injected-mistake control:** when a checker or gate is part of the
    claim, feed it a known-bad input and confirm it fails. A gate that
    has never failed has never been tested.
+7. **Walk the journey, not the diff.** Verify from the USER'S cold
+   start: their entry point, their viewport, their auth/session state
+   (unpaired, logged out, first-run). Reachability of every checkpoint
+   is part of the check - a correct screen nobody can navigate to is a
+   defect. What the walk shows outranks what the change intended, and
+   a walk fact that contradicts any owner-facing description (card,
+   checklist, doc) is a defect even where the code is right. Whether
+   a walk is owed is judged by DATA FLOW, never by which files
+   changed: a backend change that feeds any surface is user-facing in
+   effect, and the walk must confirm the displayed values against an
+   independent expectation - not merely that something rendered.
 
 ## What to look for
 

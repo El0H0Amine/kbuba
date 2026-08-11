@@ -78,6 +78,8 @@ Report back using the exact format in orchestration/IMPLEMENTER.md §4.
       frozen in the cited specification; zero Implementer design discretion
 - [ ] Allowed-files list is minimal and sufficient
 - [ ] Every acceptance criterion is a runnable command, not an opinion
+- [ ] User-facing task: acceptance includes the cold-start walked
+      journey (entry point -> every checkpoint), not only greps/units
 - [ ] Visual/UX task: committed reference artifact + rubric cited, never
       prose alone
 - [ ] Task recorded in STATE.md with its route status (IN_FLIGHT(AGENT, date)

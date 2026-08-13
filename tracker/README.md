@@ -57,9 +57,22 @@ keeps the old project name and silently dedupes into it):
 ```sh
 python3 tracker/serve.py --inbox     # print unread owner interactions, stamp read-receipts
 python3 tracker/serve.py --reopen <item-id> <question-id> "follow-up question"
+python3 tracker/serve.py --add-item "<name>" "<domain>" ["<stage>"]
+python3 tracker/serve.py --set-stage <item-id> "<stage>"
+python3 tracker/serve.py --ask <item-id> <question...>
 python3 tracker/serve.py --log-session <item-id> <session-id> <model> "final one-liner"
 python3 tracker/serve.py --sessions <item-id>   # deliberate audit read
 ```
+
+`--add-item` / `--set-stage` / `--ask` are the agent WRITE path for
+board-first planning: a headless session cannot reach the browser, and
+hand-editing `board.json` runs no check at all. They run the same
+`validate()` a browser save runs, bump `rev`, and regenerate
+`TRACKER.md`. Two refusals are deliberate and selftested: `--set-stage
+... Done` (Done is the owner's, through his own review gate) and
+`--add-item ... <stage past Speced>` (an item is never *created* past
+the plan - that is back-filling). `--ask` records a question and pauses
+the item, exactly like the UI.
 
 `--reopen` sends an insufficiently-answered question back to the owner;
 the old exchange collapses into the question's `history`. The session

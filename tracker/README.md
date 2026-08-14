@@ -59,6 +59,7 @@ python3 tracker/serve.py --inbox     # print unread owner interactions, stamp re
 python3 tracker/serve.py --reopen <item-id> <question-id> "follow-up question"
 python3 tracker/serve.py --add-item "<name>" "<domain>" ["<stage>"]
 python3 tracker/serve.py --set-stage <item-id> "<stage>"
+python3 tracker/serve.py --set-review <item-id> story|design|tech [true|false]
 python3 tracker/serve.py --ask <item-id> <question...>
 python3 tracker/serve.py --log-session <item-id> <session-id> <model> "final one-liner"
 python3 tracker/serve.py --sessions <item-id>   # deliberate audit read
@@ -72,7 +73,11 @@ hand-editing `board.json` runs no check at all. They run the same
 ... Done` (Done is the owner's, through his own review gate) and
 `--add-item ... <stage past Speced>` (an item is never *created* past
 the plan - that is back-filling). `--ask` records a question and pauses
-the item, exactly like the UI.
+the item, exactly like the UI. `--set-review` is how the Conductor asserts
+Story / Design / Tech after its own review passes ("when S/D/T pass, the
+Conductor authors the ownerCheck" - this is the write path for that);
+`--set-review <id> owner` is refused by name and selftested: the O is the
+owner's LOOK and no agent ticks it.
 
 `--reopen` sends an insufficiently-answered question back to the owner;
 the old exchange collapses into the question's `history`. The session

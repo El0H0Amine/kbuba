@@ -542,6 +542,28 @@ def set_stage_cli(item_id, stage):
     _commit(doc, f"{item_id} {was} -> {stage}", base)
 
 
+def set_review_cli(item_id, key, value="true"):
+    """The Conductor asserts Story / Design / Tech here, with its evidence in
+    the wrap report - that is upstream kbuba's own division of labour. The O
+    is the owner's LOOK and is refused by name: the same shape as
+    set_stage_cli refusing Done, and proven the same way in --selftest."""
+    k = (key or "").lower()
+    if k in ("owner", "o"):
+        sys.exit("refused: O means the owner LOOKED. He ticks it in the "
+                 "board, himself, after the owner-gate checklist - no agent "
+                 "writes it, by any route.")
+    if k not in ("story", "design", "tech"):
+        sys.exit("review key must be one of: story, design, tech")
+    v = (value or "").lower()
+    if v not in ("true", "false"):
+        sys.exit("value must be true or false")
+    doc, base = _load()
+    it = _find(doc, item_id)
+    it.setdefault("review", {"story": False, "design": False, "tech": False,
+                             "owner": False})[k] = (v == "true")
+    _commit(doc, f"{item_id} review.{k} = {v}", base)
+
+
 def ask_cli(item_id, text):
     """A question PAUSES the item - that is the whole mechanism. An agent that
     would otherwise guess writes here and stops.
@@ -646,6 +668,9 @@ def selftest():
                                   "tech": True, "owner": True}}]}))
         for call, must_say in (
                 (lambda: set_stage_cli("T-001", "Done"), "Done is the owner's"),
+                (lambda: set_review_cli("T-001", "owner"), "the owner LOOKED"),
+                (lambda: set_review_cli("T-001", "o"), "the owner LOOKED"),
+                (lambda: set_review_cli("T-001", "vibes"), "must be one of"),
                 (lambda: add_item_cli("x", "Technical", "Done"), "back-filling"),
                 (lambda: add_item_cli("x", "Technical", "Review"), "back-filling"),
                 (lambda: add_item_cli("x", "Nonsense"), "domain must be"),
@@ -667,11 +692,18 @@ def selftest():
         _doc = json.loads(DATA.read_text())
         assert _doc["rev"] == 9 and _doc["items"][0]["questions"][0]["answer"] is None
         assert "does this reach the owner?" in (ROOT / "TRACKER.md").read_text()
+        set_review_cli("T-001", "story", "false")
+        _doc = json.loads(DATA.read_text())
+        assert _doc["rev"] == 10 and _doc["items"][0]["review"]["story"] is False
+        set_review_cli("T-001", "story")            # value defaults to true
+        _doc = json.loads(DATA.read_text())
+        assert _doc["rev"] == 11 and _doc["items"][0]["review"]["story"] is True
+        assert _doc["items"][0]["review"]["owner"] is True, "O must be untouched"
 
         # Stale-rev refusal: the browser's 409, on this path.
         DATA.write_text(json.dumps({**_doc, "rev": 99}))
         try:
-            _commit(_doc, "must not land", 9)
+            _commit(_doc, "must not land", 11)
         except SystemExit as e:
             assert "moved while this command ran" in str(e), str(e)
         else:
@@ -707,6 +739,7 @@ USAGE = """tracker/serve.py - board server and agent channel
   serve.py --inbox                      unread owner events, stamps receipts
   serve.py --add-item "<name>" "<domain>" ["<stage>"]
   serve.py --set-stage <item-id> "<stage>"      (Done is the owner's)
+  serve.py --set-review <item-id> story|design|tech [true|false]   (O is the owner's)
   serve.py --ask <item-id> <question...>        (pauses the item)
   serve.py --reopen <item-id> <qid> "<follow-up>"
   serve.py --log-session <item-id> <session-id> <model> <one-liner...>
@@ -749,6 +782,10 @@ if __name__ == "__main__":
         sys.exit(0)
     if cmd == "--set-stage":
         set_stage_cli(_arg(rest, 0, "<item-id>"), _arg(rest, 1, '"<stage>"'))
+        sys.exit(0)
+    if cmd == "--set-review":
+        set_review_cli(_arg(rest, 0, "<item-id>"),
+                       _arg(rest, 1, "story|design|tech"), *rest[2:3])
         sys.exit(0)
     if cmd == "--ask":
         ask_cli(_arg(rest, 0, "<item-id>"), " ".join(rest[1:]))
